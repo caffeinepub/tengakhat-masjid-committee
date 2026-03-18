@@ -1,442 +1,378 @@
 import Map "mo:core/Map";
-import Principal "mo:core/Principal";
-import Runtime "mo:core/Runtime";
-import Time "mo:core/Time";
-import Array "mo:core/Array";
 import Nat "mo:core/Nat";
 import Text "mo:core/Text";
 import Int "mo:core/Int";
+import Runtime "mo:core/Runtime";
+import Principal "mo:core/Principal";
+import Iter "mo:core/Iter";
+import Time "mo:core/Time";
+import Migration "migration";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
+(with migration = Migration.run)
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // User Profile Type
-  public type UserProfile = {
-    name : Text;
-    phone : Text;
-  };
-
   // Member Type
-  public type Member = {
-    serial_no : Nat;
+  type Member = {
+    serialNumber : Nat;
+    username : Text;
+    pin : Text;
     name : Text;
     phone : Text;
-    monthly_amount : Nat;
-    join_date : Int;
-    status : { #active; #inactive };
+    monthlyContribution : Nat;
+    balance : Int;
   };
 
-  // Payment Type
-  public type Payment = {
-    id : Nat;
-    member_phone : Text;
+  // Admin Type
+  type Admin = {
+    username : Text;
+    role : Text; // "superadmin" or "admin"
+  };
+
+  // Payment Record Type
+  type PaymentRecord = {
     amount : Nat;
-    date : Int;
-    upi_txn_id : ?Text;
-    note : ?Text;
-  };
-
-  // UPI Configuration Type
-  public type UPIConfig = {
-    upi_id : Text;
-    merchant_name : Text;
-    description : Text;
-  };
-
-  // Activity Log Type
-  public type ActivityLog = {
-    id : Nat;
-    timestamp : Int;
-    action : Text;
-    details : Text;
-    performed_by : Principal;
-  };
-
-  // Dashboard Stats Type
-  public type DashboardStats = {
-    total_members : Nat;
-    total_collected_this_month : Nat;
-    total_collected_this_year : Nat;
-    total_outstanding_balance : Nat;
-  };
-
-  // Monthly Collection Data Type
-  public type MonthlyCollection = {
-    month : Text;
+    month : Nat;
     year : Nat;
-    amount : Nat;
+    note : Text;
+    timestamp : Int;
   };
 
-  // State variables
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  let members = Map.empty<Text, Member>(); // phone -> Member
-  let payments = Map.empty<Nat, Payment>(); // payment_id -> Payment
-  let activityLogs = Map.empty<Nat, ActivityLog>(); // log_id -> ActivityLog
-  var upiConfig : ?UPIConfig = null;
-  var nextSerialNo : Nat = 1;
-  var nextPaymentId : Nat = 1;
-  var nextLogId : Nat = 1;
-
-  // Helper function to add activity log
-  private func addActivityLog(action : Text, details : Text, caller : Principal) {
-    let log : ActivityLog = {
-      id = nextLogId;
-      timestamp = Time.now();
-      action = action;
-      details = details;
-      performed_by = caller;
-    };
-    activityLogs.add(nextLogId, log);
-    nextLogId += 1;
+  // UPI Settings Type
+  type UpiSettings = {
+    upiId : Text;
   };
 
-  // ===== User Profile Management =====
+  // User Profile Type (required by frontend)
+  public type UserProfile = {
+    userType : Text; // "admin" or "member"
+    adminInfo : ?Admin;
+    memberInfo : ?Member;
+  };
+
+  let members = Map.empty<Principal, Member>();
+  let admins = Map.empty<Principal, Admin>();
+  let payments = Map.empty<Principal, [PaymentRecord]>();
+  var upiSettings : ?UpiSettings = null;
+
+  // Required profile management functions
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+    if (caller.isAnonymous()) {
+      return null;
     };
-    userProfiles.get(caller);
+
+    // Check if admin
+    switch (admins.get(caller)) {
+      case (?admin) {
+        return ?{
+          userType = "admin";
+          adminInfo = ?admin;
+          memberInfo = null;
+        };
+      };
+      case (null) {};
+    };
+
+    // Check if member
+    switch (members.get(caller)) {
+      case (?member) {
+        return ?{
+          userType = "member";
+          adminInfo = null;
+          memberInfo = ?member;
+        };
+      };
+      case (null) {};
+    };
+
+    null;
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    // Only admins can view other users' profiles
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
-    userProfiles.get(user);
+
+    // Check if admin
+    switch (admins.get(user)) {
+      case (?admin) {
+        return ?{
+          userType = "admin";
+          adminInfo = ?admin;
+          memberInfo = null;
+        };
+      };
+      case (null) {};
+    };
+
+    // Check if member
+    switch (members.get(user)) {
+      case (?member) {
+        return ?{
+          userType = "member";
+          adminInfo = null;
+          memberInfo = ?member;
+        };
+      };
+      case (null) {};
+    };
+
+    null;
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
-    userProfiles.add(caller, profile);
+
+    // This is a placeholder - in this app, profiles are managed through
+    // specific functions (addMember, updatePin, etc.)
+    Runtime.trap("Use specific member/admin management functions");
   };
 
-  // ===== Member Management =====
+  // Admin Management
+
+  public shared ({ caller }) func addAdmin(principal : Principal, username : Text, role : Text) : async () {
+    // Only admins can add other admins
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can add other admins");
+    };
+
+    // Validate role
+    if (role != "admin" and role != "superadmin") {
+      Runtime.trap("Invalid role: must be 'admin' or 'superadmin'");
+    };
+
+    let admin = { username; role };
+    admins.add(principal, admin);
+
+    // Assign admin role in access control system
+    AccessControl.assignRole(accessControlState, caller, principal, #admin);
+  };
+
+  public query ({ caller }) func getAdmin(principal : Principal) : async ?Admin {
+    // Only admins can view admin info
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can view admin information");
+    };
+
+    admins.get(principal);
+  };
+
+  public query ({ caller }) func listAdmins() : async [(Principal, Admin)] {
+    // Only admins can list admins
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can list admins");
+    };
+
+    admins.entries().toArray();
+  };
+
+  // Member Management
 
   public shared ({ caller }) func addMember(
+    memberPrincipal : Principal,
+    username : Text,
+    pin : Text,
     name : Text,
     phone : Text,
-    monthly_amount : Nat,
-    join_date : Int,
-  ) : async Member {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+    monthlyContribution : Nat,
+    balance : Int,
+  ) : async () {
+    // Only admins can add members
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
       Runtime.trap("Unauthorized: Only admins can add members");
     };
 
-    // Check if phone already exists
-    switch (members.get(phone)) {
-      case (?_) {
-        Runtime.trap("Member with this phone number already exists");
-      };
-      case null {
-        let member : Member = {
-          serial_no = nextSerialNo;
-          name = name;
-          phone = phone;
-          monthly_amount = monthly_amount;
-          join_date = join_date;
-          status = #active;
-        };
-        members.add(phone, member);
-        nextSerialNo += 1;
-
-        addActivityLog("member_added", "Added member: " # name # " (" # phone # ")", caller);
-        member;
-      };
+    let member = {
+      serialNumber = members.size() + 1;
+      username;
+      pin;
+      name;
+      phone;
+      monthlyContribution;
+      balance;
     };
-  };
+    members.add(memberPrincipal, member);
 
-  public shared ({ caller }) func deleteMember(phone : Text) : async () {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can delete members");
-    };
-
-    switch (members.get(phone)) {
-      case (?member) {
-        members.remove(phone);
-        addActivityLog("member_deleted", "Deleted member: " # member.name # " (" # phone # ")", caller);
-      };
-      case null {
-        Runtime.trap("Member not found");
-      };
-    };
+    // Assign user role in access control system
+    AccessControl.assignRole(accessControlState, caller, memberPrincipal, #user);
   };
 
   public shared ({ caller }) func updateMember(
-    phone : Text,
+    memberPrincipal : Principal,
+    username : Text,
     name : Text,
-    monthly_amount : Nat,
-    status : { #active; #inactive },
-  ) : async Member {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+    phone : Text,
+    monthlyContribution : Nat,
+    balance : Int,
+  ) : async () {
+    // Only admins can update members
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
       Runtime.trap("Unauthorized: Only admins can update members");
     };
 
-    switch (members.get(phone)) {
-      case (?member) {
-        let updatedMember : Member = {
-          serial_no = member.serial_no;
-          name = name;
-          phone = phone;
-          monthly_amount = monthly_amount;
-          join_date = member.join_date;
-          status = status;
+    switch (members.get(memberPrincipal)) {
+      case (?existingMember) {
+        let updatedMember = {
+          serialNumber = existingMember.serialNumber;
+          username;
+          pin = existingMember.pin; // Keep existing PIN
+          name;
+          phone;
+          monthlyContribution;
+          balance;
         };
-        members.add(phone, updatedMember);
-        updatedMember;
+        members.add(memberPrincipal, updatedMember);
       };
-      case null {
+      case (null) {
         Runtime.trap("Member not found");
       };
     };
   };
 
-  public query ({ caller }) func listAllMembers() : async [Member] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list all members");
+  public shared ({ caller }) func deleteMember(memberPrincipal : Principal) : async () {
+    // Only admins can delete members
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can delete members");
     };
 
-    members.values().toArray();
+    members.remove(memberPrincipal);
+    payments.remove(memberPrincipal);
   };
 
-  public query ({ caller }) func getMemberByPhone(phone : Text) : async ?Member {
-    // Members can view their own profile, admins can view any
-    let profile = userProfiles.get(caller);
-    let isOwnProfile = switch (profile) {
-      case (?p) { p.phone == phone };
-      case null { false };
+  public query ({ caller }) func getMember() : async ?Member {
+    // Members can view their own profile
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only members can view their profile");
     };
 
-    if (not isOwnProfile and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own member profile");
-    };
-
-    members.get(phone);
+    members.get(caller);
   };
 
-  // ===== Payment Management =====
+  public query ({ caller }) func getMemberByPrincipal(memberPrincipal : Principal) : async ?Member {
+    // Only admins can view other members' profiles
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can view member profiles");
+    };
 
-  public shared ({ caller }) func recordPayment(
-    member_phone : Text,
+    members.get(memberPrincipal);
+  };
+
+  public query ({ caller }) func listMembers() : async [(Principal, Member)] {
+    // Only admins can list all members
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can list members");
+    };
+
+    members.entries().toArray();
+  };
+
+  public shared ({ caller }) func updatePin(newPin : Text) : async () {
+    // Members can update their own PIN
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only members can update their PIN");
+    };
+
+    switch (members.get(caller)) {
+      case (?member) {
+        let updatedMember = { member with pin = newPin };
+        members.add(caller, updatedMember);
+      };
+      case (null) {
+        Runtime.trap("Member not found");
+      };
+    };
+  };
+
+  // UPI Settings Management
+
+  public shared ({ caller }) func updateUpiSettings(upiId : Text) : async () {
+    // Only admins can update UPI settings
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can update UPI settings");
+    };
+
+    upiSettings := ?{ upiId };
+  };
+
+  public query ({ caller }) func getUpiSettings() : async ?UpiSettings {
+    // Only authenticated users can view UPI settings
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only authenticated users can view UPI settings");
+    };
+
+    upiSettings;
+  };
+
+  // Payment Records Management
+
+  public shared ({ caller }) func addPaymentRecord(
+    memberPrincipal : Principal,
     amount : Nat,
-    date : Int,
-    upi_txn_id : ?Text,
-    note : ?Text,
-  ) : async Payment {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can record payments");
+    month : Nat,
+    year : Nat,
+    note : Text,
+  ) : async () {
+    // Only admins can add payment records
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can add payment records");
     };
 
     // Verify member exists
-    switch (members.get(member_phone)) {
-      case null {
+    switch (members.get(memberPrincipal)) {
+      case (null) {
         Runtime.trap("Member not found");
       };
-      case (?_) {
-        let payment : Payment = {
-          id = nextPaymentId;
-          member_phone = member_phone;
-          amount = amount;
-          date = date;
-          upi_txn_id = upi_txn_id;
-          note = note;
-        };
-        payments.add(nextPaymentId, payment);
-        nextPaymentId += 1;
+      case (?_) {};
+    };
 
-        addActivityLog("payment_recorded", "Payment of ₹" # amount.toText() # " recorded for " # member_phone, caller);
-        payment;
+    let paymentRecord = {
+      amount;
+      month;
+      year;
+      note;
+      timestamp = Time.now();
+    };
+
+    switch (payments.get(memberPrincipal)) {
+      case (?existingPayments) {
+        let newPayments = existingPayments.concat([paymentRecord]);
+        payments.add(memberPrincipal, newPayments);
+      };
+      case (null) {
+        payments.add(memberPrincipal, [paymentRecord]);
       };
     };
   };
 
-  public query ({ caller }) func getAllPayments() : async [Payment] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view all payments");
+  public query ({ caller }) func getPayments() : async [PaymentRecord] {
+    // Members can view their own payment records
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only members can view their payments");
     };
 
-    payments.values().toArray();
-  };
-
-  public query ({ caller }) func getPaymentHistory(member_phone : Text) : async [Payment] {
-    // Members can view their own payment history, admins can view any
-    let profile = userProfiles.get(caller);
-    let isOwnProfile = switch (profile) {
-      case (?p) { p.phone == member_phone };
-      case null { false };
-    };
-
-    if (not isOwnProfile and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own payment history");
-    };
-
-    let allPayments = payments.values().toArray();
-    allPayments.filter(func(p : Payment) : Bool { p.member_phone == member_phone });
-  };
-
-  public query ({ caller }) func getYearlyBalance(member_phone : Text, year : Nat) : async Int {
-    // Members can view their own balance, admins can view any
-    let profile = userProfiles.get(caller);
-    let isOwnProfile = switch (profile) {
-      case (?p) { p.phone == member_phone };
-      case null { false };
-    };
-
-    if (not isOwnProfile and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own balance");
-    };
-
-    switch (members.get(member_phone)) {
-      case null { Runtime.trap("Member not found") };
-      case (?member) {
-        let yearlyTarget = member.monthly_amount * 12;
-        let allPayments = payments.values().toArray();
-        let yearPayments = allPayments.filter(func(p : Payment) : Bool {
-          p.member_phone == member_phone and isInYear(p.date, year)
-        });
-        let totalPaid = yearPayments.foldLeft(0, func(acc : Nat, p : Payment) : Nat {
-          acc + p.amount
-        });
-        yearlyTarget - totalPaid;
-      };
+    switch (payments.get(caller)) {
+      case (?records) { records };
+      case (null) { [] };
     };
   };
 
-  public query ({ caller }) func getMonthlyBalance(member_phone : Text, year : Nat, month : Nat) : async Int {
-    // Members can view their own balance, admins can view any
-    let profile = userProfiles.get(caller);
-    let isOwnProfile = switch (profile) {
-      case (?p) { p.phone == member_phone };
-      case null { false };
+  public query ({ caller }) func getPaymentsByMember(memberPrincipal : Principal) : async [PaymentRecord] {
+    // Only admins can view other members' payment records
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can view member payment records");
     };
 
-    if (not isOwnProfile and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own balance");
+    switch (payments.get(memberPrincipal)) {
+      case (?records) { records };
+      case (null) { [] };
     };
-
-    switch (members.get(member_phone)) {
-      case null { Runtime.trap("Member not found") };
-      case (?member) {
-        let monthlyTarget = member.monthly_amount;
-        let allPayments = payments.values().toArray();
-        let monthPayments = allPayments.filter(func(p : Payment) : Bool {
-          p.member_phone == member_phone and isInMonth(p.date, year, month)
-        });
-        let totalPaid = monthPayments.foldLeft(0, func(acc : Nat, p : Payment) : Nat {
-          acc + p.amount
-        });
-        monthlyTarget - totalPaid;
-      };
-    };
-  };
-
-  // Helper functions for date filtering
-  private func isInYear(timestamp : Int, year : Nat) : Bool {
-    // Simplified: assumes timestamp is in nanoseconds
-    // In production, use proper date library
-    true // Placeholder
-  };
-
-  private func isInMonth(timestamp : Int, year : Nat, month : Nat) : Bool {
-    // Simplified: assumes timestamp is in nanoseconds
-    // In production, use proper date library
-    true // Placeholder
-  };
-
-  // ===== UPI Configuration =====
-
-  public shared ({ caller }) func setUPIConfig(
-    upi_id : Text,
-    merchant_name : Text,
-    description : Text,
-  ) : async () {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can set UPI configuration");
-    };
-
-    upiConfig := ?{
-      upi_id = upi_id;
-      merchant_name = merchant_name;
-      description = description;
-    };
-  };
-
-  public query func getUPIConfig() : async ?UPIConfig {
-    // Public access - anyone can read UPI config to generate payment links
-    upiConfig;
-  };
-
-  // ===== Activity Log =====
-
-  public query ({ caller }) func getActivityLog() : async [ActivityLog] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view activity log");
-    };
-
-    activityLogs.values().toArray();
-  };
-
-  // ===== Dashboard Stats =====
-
-  public query ({ caller }) func getDashboardStats() : async DashboardStats {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view dashboard stats");
-    };
-
-    let allMembers = members.values().toArray();
-    let activeMembers = allMembers.filter(func(m : Member) : Bool {
-      switch (m.status) {
-        case (#active) { true };
-        case (#inactive) { false };
-      };
-    });
-
-    let allPayments = payments.values().toArray();
-    let now = Time.now();
-
-    // Calculate this month's collections (simplified)
-    let thisMonthPayments = allPayments; // Placeholder - filter by current month
-    let totalThisMonth = thisMonthPayments.foldLeft(0, func(acc : Nat, p : Payment) : Nat {
-      acc + p.amount
-    });
-
-    // Calculate this year's collections (simplified)
-    let thisYearPayments = allPayments; // Placeholder - filter by current year
-    let totalThisYear = thisYearPayments.foldLeft(0, func(acc : Nat, p : Payment) : Nat {
-      acc + p.amount
-    });
-
-    // Calculate outstanding balance
-    let yearlyTarget = activeMembers.foldLeft(0, func(acc : Nat, m : Member) : Nat {
-      acc + (m.monthly_amount * 12)
-    });
-    let outstanding = if (yearlyTarget > totalThisYear) {
-      yearlyTarget - totalThisYear;
-    } else {
-      0;
-    };
-
-    {
-      total_members = activeMembers.size();
-      total_collected_this_month = totalThisMonth;
-      total_collected_this_year = totalThisYear;
-      total_outstanding_balance = outstanding;
-    };
-  };
-
-  public query ({ caller }) func getMonthlyCollectionData() : async [MonthlyCollection] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view monthly collection data");
-    };
-
-    // Placeholder - return last 12 months of data
-    // In production, calculate actual monthly totals
-    [];
   };
 };

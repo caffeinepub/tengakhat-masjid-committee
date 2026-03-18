@@ -1,33 +1,31 @@
 # Tengakhat Masjid Committee
 
 ## Current State
-New project, no existing application.
+Existing app with simulated OTP login, member dashboard, UPI payment links, and Islamic-themed UI.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Phone + OTP login with two roles: Admin and Member
-- Admin dashboard: add/delete/view members, contribution reports, payment history, balance overview, activity log
-- Member dashboard: profile card (serial no, name, phone, monthly amount, yearly balance), payment history, UPI pay links (GPay/PhonePe/Paytm)
-- Members data model: serial_no, name, phone, monthly_amount, total_paid, join_date, status (active/inactive)
-- Payments data model: member_phone, amount, date, upi_txn_id, status
-- UPI payment link generation (deep links for GPay/PhonePe/Paytm) with configurable UPI ID
-- Charts: monthly contribution bar chart, yearly pie chart
-- Activity log for admin
-- Role-based access (admin vs member)
+- Multi-admin authentication: username + password login stored in backend
+- Super-admin role that can add/remove other admins
+- Member authentication: login via serial number or username + PIN
+- Admin ability to set username and PIN when adding a member
+- UPI settings page for admin to configure committee UPI ID
 
 ### Modify
-- N/A (new project)
+- Replace fake OTP login with real username/password (admin) and serial/username+PIN (member) login
+- Member add form: include username and PIN fields
 
 ### Remove
-- N/A (new project)
+- All fake OTP/phone login code
+- Stripe/debit card payment integration
 
 ## Implementation Plan
-1. Backend: Member and Payment data stores with CRUD, role assignment, payment recording, balance calculation, activity log
-2. Backend: UPI configuration (admin sets UPI ID/merchant name)
-3. Frontend: Splash/landing page with app name and logo placeholder
-4. Frontend: Phone + OTP login screen (simulated OTP for demo)
-5. Frontend: Role-based routing (admin vs member)
-6. Frontend: Admin dashboard - member table, add/delete member forms, charts, activity log
-7. Frontend: Member dashboard - profile card, payment history, UPI pay buttons
-8. Frontend: Payment screen with UPI deep links for GPay/PhonePe/Paytm
+1. Backend: admin accounts (username, password hash, role), member accounts (serial, username, pin, name, phone, contribution), UPI settings
+2. Backend: login/auth functions for admins and members, session tokens
+3. Backend: CRUD for members, admin management by super-admin
+4. Frontend: Admin login page (username+password)
+5. Frontend: Member login page (serial number or username + PIN)
+6. Frontend: Admin dashboard with member management, UPI settings, and other admin management
+7. Frontend: Member dashboard with profile, balance, UPI payment links
+8. PWA manifest and service worker retained

@@ -1,0 +1,18 @@
+{
+  "name": "Tengakhat Masjid Committee",
+  "short_name": "TMC",
+  "description": "Mosque committee member contributions and UPI payments",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1E3A8A",
+  "theme_color": "#00A859",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/assets/generated/masjid-icon-transparent.dim_512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

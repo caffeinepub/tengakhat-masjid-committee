@@ -8,206 +8,187 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const Member = IDL.Record({
-  'status' : IDL.Variant({ 'active' : IDL.Null, 'inactive' : IDL.Null }),
-  'join_date' : IDL.Int,
-  'monthly_amount' : IDL.Nat,
-  'name' : IDL.Text,
-  'phone' : IDL.Text,
-  'serial_no' : IDL.Nat,
-});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
-export const ActivityLog = IDL.Record({
-  'id' : IDL.Nat,
-  'action' : IDL.Text,
-  'performed_by' : IDL.Principal,
-  'timestamp' : IDL.Int,
-  'details' : IDL.Text,
-});
-export const Payment = IDL.Record({
-  'id' : IDL.Nat,
-  'date' : IDL.Int,
-  'note' : IDL.Opt(IDL.Text),
-  'member_phone' : IDL.Text,
-  'upi_txn_id' : IDL.Opt(IDL.Text),
-  'amount' : IDL.Nat,
+export const Admin = IDL.Record({ 'username' : IDL.Text, 'role' : IDL.Text });
+export const Member = IDL.Record({
+  'pin' : IDL.Text,
+  'username' : IDL.Text,
+  'balance' : IDL.Int,
+  'name' : IDL.Text,
+  'serialNumber' : IDL.Nat,
+  'phone' : IDL.Text,
+  'monthlyContribution' : IDL.Nat,
 });
 export const UserProfile = IDL.Record({
-  'name' : IDL.Text,
-  'phone' : IDL.Text,
+  'userType' : IDL.Text,
+  'adminInfo' : IDL.Opt(Admin),
+  'memberInfo' : IDL.Opt(Member),
 });
-export const DashboardStats = IDL.Record({
-  'total_collected_this_year' : IDL.Nat,
-  'total_collected_this_month' : IDL.Nat,
-  'total_members' : IDL.Nat,
-  'total_outstanding_balance' : IDL.Nat,
-});
-export const MonthlyCollection = IDL.Record({
-  'month' : IDL.Text,
+export const PaymentRecord = IDL.Record({
+  'month' : IDL.Nat,
+  'note' : IDL.Text,
   'year' : IDL.Nat,
+  'timestamp' : IDL.Int,
   'amount' : IDL.Nat,
 });
-export const UPIConfig = IDL.Record({
-  'description' : IDL.Text,
-  'upi_id' : IDL.Text,
-  'merchant_name' : IDL.Text,
-});
+export const UpiSettings = IDL.Record({ 'upiId' : IDL.Text });
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
-  'addMember' : IDL.Func([IDL.Text, IDL.Text, IDL.Nat, IDL.Int], [Member], []),
+  'addAdmin' : IDL.Func([IDL.Principal, IDL.Text, IDL.Text], [], []),
+  'addMember' : IDL.Func(
+      [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
+      [],
+      [],
+    ),
+  'addPaymentRecord' : IDL.Func(
+      [IDL.Principal, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+      [],
+      [],
+    ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-  'deleteMember' : IDL.Func([IDL.Text], [], []),
-  'getActivityLog' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
-  'getAllPayments' : IDL.Func([], [IDL.Vec(Payment)], ['query']),
+  'deleteMember' : IDL.Func([IDL.Principal], [], []),
+  'getAdmin' : IDL.Func([IDL.Principal], [IDL.Opt(Admin)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getDashboardStats' : IDL.Func([], [DashboardStats], ['query']),
-  'getMemberByPhone' : IDL.Func([IDL.Text], [IDL.Opt(Member)], ['query']),
-  'getMonthlyBalance' : IDL.Func(
-      [IDL.Text, IDL.Nat, IDL.Nat],
-      [IDL.Int],
+  'getMember' : IDL.Func([], [IDL.Opt(Member)], ['query']),
+  'getMemberByPrincipal' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(Member)],
       ['query'],
     ),
-  'getMonthlyCollectionData' : IDL.Func(
-      [],
-      [IDL.Vec(MonthlyCollection)],
+  'getPayments' : IDL.Func([], [IDL.Vec(PaymentRecord)], ['query']),
+  'getPaymentsByMember' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Vec(PaymentRecord)],
       ['query'],
     ),
-  'getPaymentHistory' : IDL.Func([IDL.Text], [IDL.Vec(Payment)], ['query']),
-  'getUPIConfig' : IDL.Func([], [IDL.Opt(UPIConfig)], ['query']),
+  'getUpiSettings' : IDL.Func([], [IDL.Opt(UpiSettings)], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
-  'getYearlyBalance' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Int], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'listAllMembers' : IDL.Func([], [IDL.Vec(Member)], ['query']),
-  'recordPayment' : IDL.Func(
-      [IDL.Text, IDL.Nat, IDL.Int, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
-      [Payment],
+  'listAdmins' : IDL.Func(
       [],
+      [IDL.Vec(IDL.Tuple(IDL.Principal, Admin))],
+      ['query'],
+    ),
+  'listMembers' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Principal, Member))],
+      ['query'],
     ),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
-  'setUPIConfig' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'updateMember' : IDL.Func(
-      [
-        IDL.Text,
-        IDL.Text,
-        IDL.Nat,
-        IDL.Variant({ 'active' : IDL.Null, 'inactive' : IDL.Null }),
-      ],
-      [Member],
+      [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
+      [],
       [],
     ),
+  'updatePin' : IDL.Func([IDL.Text], [], []),
+  'updateUpiSettings' : IDL.Func([IDL.Text], [], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const Member = IDL.Record({
-    'status' : IDL.Variant({ 'active' : IDL.Null, 'inactive' : IDL.Null }),
-    'join_date' : IDL.Int,
-    'monthly_amount' : IDL.Nat,
-    'name' : IDL.Text,
-    'phone' : IDL.Text,
-    'serial_no' : IDL.Nat,
-  });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
-  const ActivityLog = IDL.Record({
-    'id' : IDL.Nat,
-    'action' : IDL.Text,
-    'performed_by' : IDL.Principal,
-    'timestamp' : IDL.Int,
-    'details' : IDL.Text,
+  const Admin = IDL.Record({ 'username' : IDL.Text, 'role' : IDL.Text });
+  const Member = IDL.Record({
+    'pin' : IDL.Text,
+    'username' : IDL.Text,
+    'balance' : IDL.Int,
+    'name' : IDL.Text,
+    'serialNumber' : IDL.Nat,
+    'phone' : IDL.Text,
+    'monthlyContribution' : IDL.Nat,
   });
-  const Payment = IDL.Record({
-    'id' : IDL.Nat,
-    'date' : IDL.Int,
-    'note' : IDL.Opt(IDL.Text),
-    'member_phone' : IDL.Text,
-    'upi_txn_id' : IDL.Opt(IDL.Text),
-    'amount' : IDL.Nat,
+  const UserProfile = IDL.Record({
+    'userType' : IDL.Text,
+    'adminInfo' : IDL.Opt(Admin),
+    'memberInfo' : IDL.Opt(Member),
   });
-  const UserProfile = IDL.Record({ 'name' : IDL.Text, 'phone' : IDL.Text });
-  const DashboardStats = IDL.Record({
-    'total_collected_this_year' : IDL.Nat,
-    'total_collected_this_month' : IDL.Nat,
-    'total_members' : IDL.Nat,
-    'total_outstanding_balance' : IDL.Nat,
-  });
-  const MonthlyCollection = IDL.Record({
-    'month' : IDL.Text,
+  const PaymentRecord = IDL.Record({
+    'month' : IDL.Nat,
+    'note' : IDL.Text,
     'year' : IDL.Nat,
+    'timestamp' : IDL.Int,
     'amount' : IDL.Nat,
   });
-  const UPIConfig = IDL.Record({
-    'description' : IDL.Text,
-    'upi_id' : IDL.Text,
-    'merchant_name' : IDL.Text,
-  });
+  const UpiSettings = IDL.Record({ 'upiId' : IDL.Text });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addAdmin' : IDL.Func([IDL.Principal, IDL.Text, IDL.Text], [], []),
     'addMember' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
-        [Member],
+        [
+          IDL.Principal,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Nat,
+          IDL.Int,
+        ],
+        [],
+        [],
+      ),
+    'addPaymentRecord' : IDL.Func(
+        [IDL.Principal, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
+        [],
         [],
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-    'deleteMember' : IDL.Func([IDL.Text], [], []),
-    'getActivityLog' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
-    'getAllPayments' : IDL.Func([], [IDL.Vec(Payment)], ['query']),
+    'deleteMember' : IDL.Func([IDL.Principal], [], []),
+    'getAdmin' : IDL.Func([IDL.Principal], [IDL.Opt(Admin)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getDashboardStats' : IDL.Func([], [DashboardStats], ['query']),
-    'getMemberByPhone' : IDL.Func([IDL.Text], [IDL.Opt(Member)], ['query']),
-    'getMonthlyBalance' : IDL.Func(
-        [IDL.Text, IDL.Nat, IDL.Nat],
-        [IDL.Int],
+    'getMember' : IDL.Func([], [IDL.Opt(Member)], ['query']),
+    'getMemberByPrincipal' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(Member)],
         ['query'],
       ),
-    'getMonthlyCollectionData' : IDL.Func(
-        [],
-        [IDL.Vec(MonthlyCollection)],
+    'getPayments' : IDL.Func([], [IDL.Vec(PaymentRecord)], ['query']),
+    'getPaymentsByMember' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(PaymentRecord)],
         ['query'],
       ),
-    'getPaymentHistory' : IDL.Func([IDL.Text], [IDL.Vec(Payment)], ['query']),
-    'getUPIConfig' : IDL.Func([], [IDL.Opt(UPIConfig)], ['query']),
+    'getUpiSettings' : IDL.Func([], [IDL.Opt(UpiSettings)], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
-    'getYearlyBalance' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Int], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'listAllMembers' : IDL.Func([], [IDL.Vec(Member)], ['query']),
-    'recordPayment' : IDL.Func(
-        [IDL.Text, IDL.Nat, IDL.Int, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
-        [Payment],
+    'listAdmins' : IDL.Func(
         [],
+        [IDL.Vec(IDL.Tuple(IDL.Principal, Admin))],
+        ['query'],
+      ),
+    'listMembers' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Principal, Member))],
+        ['query'],
       ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
-    'setUPIConfig' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'updateMember' : IDL.Func(
-        [
-          IDL.Text,
-          IDL.Text,
-          IDL.Nat,
-          IDL.Variant({ 'active' : IDL.Null, 'inactive' : IDL.Null }),
-        ],
-        [Member],
+        [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
+        [],
         [],
       ),
+    'updatePin' : IDL.Func([IDL.Text], [], []),
+    'updateUpiSettings' : IDL.Func([IDL.Text], [], []),
   });
 };
 
