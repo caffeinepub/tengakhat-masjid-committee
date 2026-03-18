@@ -1,10 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CheckCircle2,
   Copy,
   CreditCard,
+  History,
   LogOut,
   Moon,
   Phone,
@@ -16,7 +18,37 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import type { Member } from "../hooks/useQueries";
-import { useUpiSettings } from "../hooks/useQueries";
+import { useMyPayments, useUpiSettings } from "../hooks/useQueries";
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const MONTHS_FULL = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 interface Props {
   member: Member;
@@ -26,9 +58,11 @@ interface Props {
 export default function MemberDashboard({ member, onLogout }: Props) {
   const { identity } = useInternetIdentity();
   const { data: upiSettings } = useUpiSettings();
+  const { data: payments = [], isLoading: paymentsLoading } = useMyPayments();
   const [copiedPrincipal, setCopiedPrincipal] = useState(false);
 
   const myPrincipal = identity?.getPrincipal().toString() ?? "";
+  const currentYear = new Date().getFullYear();
 
   const copyPrincipal = () => {
     navigator.clipboard.writeText(myPrincipal);
@@ -63,6 +97,13 @@ export default function MemberDashboard({ member, onLogout }: Props) {
     toast.success(`Opening ${appName}...`);
     window.location.href = url;
   };
+
+  // Build a set of paid months for current year
+  const paidMonthsThisYear = new Set(
+    payments
+      .filter((p) => Number(p.year) === currentYear)
+      .map((p) => Number(p.month)),
+  );
 
   return (
     <div className="min-h-screen flex flex-col navy-gradient font-poppins">
@@ -372,6 +413,91 @@ export default function MemberDashboard({ member, onLogout }: Props) {
                 after payment.
               </p>
             </>
+          )}
+        </motion.div>
+
+        {/* Payment History Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="glass-card-navy rounded-2xl p-6 space-y-4"
+          data-ocid="member.history.card"
+        >
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <History size={18} className="text-gold" />
+            Payment History
+          </h3>
+
+          {/* Monthly status badges for current year */}
+          <div>
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-3">
+              {currentYear} — Monthly Status
+            </p>
+            <div className="grid grid-cols-6 gap-2">
+              {MONTHS.map((m, i) => {
+                const monthNum = i + 1;
+                const paid = paidMonthsThisYear.has(monthNum);
+                return (
+                  <div
+                    key={m}
+                    className={`rounded-lg px-2 py-1.5 text-center text-xs font-medium border ${
+                      paid
+                        ? "bg-green-500/20 border-green-500/40 text-green-400"
+                        : "bg-white/5 border-white/10 text-white/30"
+                    }`}
+                  >
+                    {m}
+                    {paid && (
+                      <div className="text-green-400 text-[10px] mt-0.5">✓</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Separator className="bg-white/10" />
+
+          {/* Payment records list */}
+          {paymentsLoading ? (
+            <div className="space-y-2" data-ocid="member.history.loading_state">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full bg-white/10" />
+              ))}
+            </div>
+          ) : payments.length === 0 ? (
+            <div
+              className="text-center py-6"
+              data-ocid="member.history.empty_state"
+            >
+              <p className="text-white/40 text-sm">No payment records yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {payments.map((p, idx) => (
+                <motion.div
+                  key={`${p.month.toString()}-${p.year.toString()}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 }}
+                  className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-4 py-3"
+                  data-ocid={`member.history.item.${idx + 1}`}
+                >
+                  <div>
+                    <p className="text-white font-medium text-sm">
+                      {MONTHS_FULL[Number(p.month) - 1]} {p.year.toString()}
+                    </p>
+                    {p.note && (
+                      <p className="text-white/40 text-xs mt-0.5">{p.note}</p>
+                    )}
+                  </div>
+                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30 font-semibold">
+                    ₹{p.amount.toString()}
+                  </Badge>
+                </motion.div>
+              ))}
+            </div>
           )}
         </motion.div>
       </main>

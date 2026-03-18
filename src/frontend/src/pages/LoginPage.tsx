@@ -2,12 +2,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Lock, Moon, Shield, User } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Moon, Shield, User } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import type { Member } from "../hooks/useQueries";
+
+const DEFAULT_CREDENTIALS = { username: "admin", password: "logmein" };
+
+function getStoredCredentials(): { username: string; password: string } {
+  try {
+    const raw = localStorage.getItem("adminCredentials");
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return DEFAULT_CREDENTIALS;
+}
 
 interface Props {
   onAdminLogin: () => void;
@@ -27,15 +39,34 @@ export default function LoginPage({
   onCancelVerify,
 }: Props) {
   const { login, isLoggingIn, identity } = useInternetIdentity();
+
+  // Admin login state
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  // Member login state
   const [memberPin, setMemberPin] = useState("");
   const [pinVerified, setPinVerified] = useState(false);
 
   const handleAdminLogin = async () => {
+    const creds = getStoredCredentials();
+    if (
+      adminUsername.trim() !== creds.username ||
+      adminPassword !== creds.password
+    ) {
+      toast.error("Incorrect username or password");
+      return;
+    }
+    setAdminLoading(true);
     try {
       await login();
       onAdminLogin();
     } catch {
-      toast.error("Login failed. Please try again.");
+      toast.error("Authentication failed. Please try again.");
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -59,7 +90,7 @@ export default function LoginPage({
   };
 
   const isLoadingAdmin =
-    (isLoggingIn || isVerifying) && pendingRole === "admin";
+    adminLoading || ((isLoggingIn || isVerifying) && pendingRole === "admin");
   const isLoadingMember =
     (isLoggingIn || isVerifying) && pendingRole === "member";
 
@@ -173,24 +204,73 @@ export default function LoginPage({
 
               {/* Admin Login */}
               <TabsContent value="admin" className="space-y-4">
-                <div className="rounded-xl bg-white/5 border border-gold/20 p-4 text-sm text-white/60">
-                  <p className="flex items-center gap-2">
-                    <Shield size={14} className="text-gold flex-shrink-0" />
-                    Click below to securely connect with Internet Identity.
-                    Admin privileges are verified automatically.
-                  </p>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">Username</Label>
+                    <div className="relative">
+                      <User
+                        size={15}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Enter username"
+                        value={adminUsername}
+                        onChange={(e) => setAdminUsername(e.target.value)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleAdminLogin()
+                        }
+                        disabled={isLoadingAdmin}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9"
+                        data-ocid="login.admin.input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">Password</Label>
+                    <div className="relative">
+                      <Lock
+                        size={15}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                      />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleAdminLogin()
+                        }
+                        disabled={isLoadingAdmin}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9 pr-10"
+                        data-ocid="login.admin.password_input"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                      >
+                        {showPassword ? (
+                          <EyeOff size={15} />
+                        ) : (
+                          <Eye size={15} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <Button
                   className="w-full btn-gold py-3 text-base font-semibold"
                   onClick={handleAdminLogin}
-                  disabled={isLoggingIn || isLoadingAdmin}
+                  disabled={isLoadingAdmin || !adminUsername || !adminPassword}
                   data-ocid="login.admin.primary_button"
                 >
                   {isLoadingAdmin ? (
                     <>
                       <Loader2 size={16} className="mr-2 animate-spin" />
-                      Verifying Admin...
+                      Verifying...
                     </>
                   ) : (
                     <>
@@ -238,7 +318,7 @@ export default function LoginPage({
                       ) : (
                         <>
                           <User size={16} className="mr-2" />
-                          Connect & Login as Member
+                          Connect &amp; Login as Member
                         </>
                       )}
                     </Button>

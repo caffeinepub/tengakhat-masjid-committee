@@ -1,10 +1,16 @@
 import type { Principal } from "@dfinity/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Member, UpiSettings } from "../backend.d.ts";
+import type {
+  Admin,
+  Member,
+  PaymentRecord,
+  UpiSettings,
+  UserProfile,
+} from "../backend.d.ts";
 import { useActor } from "./useActor";
 import { useInternetIdentity } from "./useInternetIdentity";
 
-export type { Member, UpiSettings };
+export type { Admin, Member, PaymentRecord, UpiSettings, UserProfile };
 
 function useActorEnabled() {
   const { actor, isFetching } = useActor();
@@ -44,6 +50,42 @@ export function useUpiSettings() {
   return useQuery<UpiSettings | null>({
     queryKey: ["upiSettings"],
     queryFn: () => actor!.getUpiSettings(),
+    enabled,
+  });
+}
+
+export function useCallerProfile() {
+  const { actor, enabled } = useActorEnabled();
+  return useQuery<UserProfile | null>({
+    queryKey: ["callerProfile"],
+    queryFn: () => actor!.getCallerUserProfile(),
+    enabled,
+  });
+}
+
+export function useAdmins() {
+  const { actor, enabled } = useActorEnabled();
+  return useQuery<Array<[Principal, Admin]>>({
+    queryKey: ["admins"],
+    queryFn: () => actor!.listAdmins(),
+    enabled,
+  });
+}
+
+export function usePaymentsByMember(memberPrincipal: Principal | null) {
+  const { actor, enabled } = useActorEnabled();
+  return useQuery<Array<PaymentRecord>>({
+    queryKey: ["payments", memberPrincipal?.toString()],
+    queryFn: () => actor!.getPaymentsByMember(memberPrincipal!),
+    enabled: enabled && memberPrincipal != null,
+  });
+}
+
+export function useMyPayments() {
+  const { actor, enabled } = useActorEnabled();
+  return useQuery<Array<PaymentRecord>>({
+    queryKey: ["myPayments"],
+    queryFn: () => actor!.getPayments(),
     enabled,
   });
 }
@@ -110,6 +152,25 @@ export function useAddPayment() {
         data.year,
         data.note,
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["payments"] }),
+    onSuccess: (_data, variables) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payments"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["payments", variables.memberPrincipal.toString()],
+        }),
+      ]),
+  });
+}
+
+export function useAddAdmin() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      principal: Principal;
+      username: string;
+      role: string;
+    }) => actor!.addAdmin(data.principal, data.username, data.role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admins"] }),
   });
 }

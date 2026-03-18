@@ -1,31 +1,27 @@
 # Tengakhat Masjid Committee
 
 ## Current State
-Existing app with simulated OTP login, member dashboard, UPI payment links, and Islamic-themed UI.
+Admin and member login both use Internet Identity (II), which is broken/confusing for users. The backend uses Principal-based AccessControl. The frontend has a LoginPage with II-triggered buttons.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Multi-admin authentication: username + password login stored in backend
-- Super-admin role that can add/remove other admins
-- Member authentication: login via serial number or username + PIN
-- Admin ability to set username and PIN when adding a member
-- UPI settings page for admin to configure committee UPI ID
+- Simple username + password login form for admins (no Internet Identity)
+- Default admin credentials: username=`admin`, password=`logmein`
+- Backend function `loginAdmin(username, password)` returning Bool
+- Backend function `changeAdminPassword(username, oldPassword, newPassword)` returning Bool
+- Frontend session management via localStorage (no II)
 
 ### Modify
-- Replace fake OTP login with real username/password (admin) and serial/username+PIN (member) login
-- Member add form: include username and PIN fields
+- Backend: Replace Principal/AccessControl-based auth with credential-based auth stored in canister state. All functions accept anonymous callers; admin actions are gated by a simple session check on the frontend.
+- Frontend LoginPage: Replace II button with username + password form for admin tab
+- Frontend App.tsx: Remove II hooks; use local session state for admin/member auth
 
 ### Remove
-- All fake OTP/phone login code
-- Stripe/debit card payment integration
+- Internet Identity dependency from login flow
+- AccessControl permission checks from backend functions
 
 ## Implementation Plan
-1. Backend: admin accounts (username, password hash, role), member accounts (serial, username, pin, name, phone, contribution), UPI settings
-2. Backend: login/auth functions for admins and members, session tokens
-3. Backend: CRUD for members, admin management by super-admin
-4. Frontend: Admin login page (username+password)
-5. Frontend: Member login page (serial number or username + PIN)
-6. Frontend: Admin dashboard with member management, UPI settings, and other admin management
-7. Frontend: Member dashboard with profile, balance, UPI payment links
-8. PWA manifest and service worker retained
+1. Rewrite backend: store admin credentials map (username -> password), expose loginAdmin and changeAdminPassword; keep member/payment/UPI functions but remove AccessControl checks
+2. Rewrite frontend LoginPage: admin tab shows username+password form; member tab keeps serial+PIN flow
+3. Rewrite App.tsx: use localStorage session state instead of II hooks
