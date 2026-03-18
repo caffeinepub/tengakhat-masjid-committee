@@ -1,0 +1,118 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Navy blue: #0B2A5B */
+    --background: 0.23 0.09 265;
+    /* White */
+    --foreground: 1 0 0;
+    /* Dark navy card */
+    --card: 0.2 0.07 265;
+    --card-foreground: 1 0 0;
+    --popover: 0.2 0.07 265;
+    --popover-foreground: 1 0 0;
+    /* Islamic green: #0A6A3B */
+    --primary: 0.4 0.13 158;
+    --primary-foreground: 1 0 0;
+    /* Navy secondary */
+    --secondary: 0.3 0.08 265;
+    --secondary-foreground: 1 0 0;
+    /* Muted green-navy */
+    --muted: 0.28 0.06 200;
+    --muted-foreground: 0.75 0.03 200;
+    /* Gold accent: #D4AF37 */
+    --accent: 0.76 0.15 88;
+    --accent-foreground: 0.15 0.05 265;
+    /* Destructive */
+    --destructive: 0.55 0.2 25;
+    --destructive-foreground: 1 0 0;
+    --border: 0.35 0.06 265;
+    --input: 0.28 0.06 200;
+    --ring: 0.76 0.15 88;
+    --radius: 0.75rem;
+    /* Charts */
+    --chart-1: 0.4 0.13 158;
+    --chart-2: 0.76 0.15 88;
+    --chart-3: 0.55 0.1 200;
+    --chart-4: 0.65 0.12 155;
+    --chart-5: 0.5 0.08 265;
+    /* Sidebar */
+    --sidebar: 0.17 0.07 265;
+    --sidebar-foreground: 1 0 0;
+    --sidebar-primary: 0.4 0.13 158;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.28 0.06 200;
+    --sidebar-accent-foreground: 0.9 0.02 200;
+    --sidebar-border: 0.3 0.05 265;
+    --sidebar-ring: 0.76 0.15 88;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-poppins;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(10, 106, 59, 0.15);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+  }
+  .glass-card-navy {
+    background: rgba(11, 42, 91, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+  }
+  .gold-divider {
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  }
+  .navy-gradient {
+    background: linear-gradient(135deg, #0b2a5b 0%, #0a2f63 100%);
+  }
+  .green-gradient {
+    background: linear-gradient(135deg, #0a6a3b 0%, #0b6d3e 100%);
+  }
+  .gold-text {
+    color: #d4af37;
+  }
+  .btn-gold {
+    background: linear-gradient(135deg, #d4af37, #c9a227);
+    color: #0b2a5b;
+    font-weight: 700;
+    border-radius: 9999px;
+    transition: all 0.2s;
+  }
+  .btn-gold:hover {
+    background: linear-gradient(135deg, #e5c048, #d4af37);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer;
+  }
+  .sidebar-link.active {
+    @apply bg-primary/30 text-white border-l-4 border-accent;
+  }
+  .stat-card {
+    background: rgba(46, 107, 75, 0.25);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: transform 0.2s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+  }
+}
