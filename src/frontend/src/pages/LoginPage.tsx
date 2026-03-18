@@ -44,13 +44,12 @@ export default function LoginPage({
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [adminLoading, setAdminLoading] = useState(false);
 
   // Member login state
   const [memberPin, setMemberPin] = useState("");
   const [pinVerified, setPinVerified] = useState(false);
 
-  const handleAdminLogin = async () => {
+  const handleAdminLogin = () => {
     const creds = getStoredCredentials();
     if (
       adminUsername.trim() !== creds.username ||
@@ -59,15 +58,7 @@ export default function LoginPage({
       toast.error("Incorrect username or password");
       return;
     }
-    setAdminLoading(true);
-    try {
-      await login();
-      onAdminLogin();
-    } catch {
-      toast.error("Authentication failed. Please try again.");
-    } finally {
-      setAdminLoading(false);
-    }
+    onAdminLogin();
   };
 
   const handleMemberConnect = async () => {
@@ -89,8 +80,6 @@ export default function LoginPage({
     }
   };
 
-  const isLoadingAdmin =
-    adminLoading || ((isLoggingIn || isVerifying) && pendingRole === "admin");
   const isLoadingMember =
     (isLoggingIn || isVerifying) && pendingRole === "member";
 
@@ -220,7 +209,6 @@ export default function LoginPage({
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleAdminLogin()
                         }
-                        disabled={isLoadingAdmin}
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9"
                         data-ocid="login.admin.input"
                       />
@@ -242,7 +230,6 @@ export default function LoginPage({
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleAdminLogin()
                         }
-                        disabled={isLoadingAdmin}
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9 pr-10"
                         data-ocid="login.admin.password_input"
                       />
@@ -264,32 +251,12 @@ export default function LoginPage({
                 <Button
                   className="w-full btn-gold py-3 text-base font-semibold"
                   onClick={handleAdminLogin}
-                  disabled={isLoadingAdmin || !adminUsername || !adminPassword}
+                  disabled={!adminUsername || !adminPassword}
                   data-ocid="login.admin.primary_button"
                 >
-                  {isLoadingAdmin ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <Shield size={16} className="mr-2" />
-                      Login as Admin
-                    </>
-                  )}
+                  <Shield size={16} className="mr-2" />
+                  Login as Admin
                 </Button>
-
-                {isLoadingAdmin && (
-                  <Button
-                    variant="ghost"
-                    className="w-full text-white/50 hover:text-white text-sm"
-                    onClick={onCancelVerify}
-                    data-ocid="login.cancel_button"
-                  >
-                    Cancel
-                  </Button>
-                )}
               </TabsContent>
 
               {/* Member Login */}

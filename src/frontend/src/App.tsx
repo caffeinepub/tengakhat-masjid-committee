@@ -16,18 +16,9 @@ export default function App() {
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>("login");
   const [memberData, setMemberData] = useState<Member | null>(null);
-  const [pendingRole, setPendingRole] = useState<"admin" | "member" | null>(
-    null,
-  );
+  const [pendingRole, setPendingRole] = useState<"member" | null>(null);
 
   const isActorReady = !!actor && !isFetching && !!identity;
-
-  // When actor is ready and we have a pending role, verify the role
-  const { data: isAdmin, isLoading: checkingAdmin } = useQuery({
-    queryKey: ["isAdmin", identity?.getPrincipal().toString()],
-    queryFn: () => actor!.isCallerAdmin(),
-    enabled: isActorReady && pendingRole === "admin",
-  });
 
   const { data: memberProfile, isLoading: checkingMember } = useQuery({
     queryKey: ["myMember", identity?.getPrincipal().toString()],
@@ -36,34 +27,20 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!identity) {
+    if (!identity && view !== "admin") {
       setView("login");
       setMemberData(null);
       setPendingRole(null);
     }
-  }, [identity]);
+  }, [identity, view]);
 
   const handleAdminLoginSuccess = () => {
-    setPendingRole("admin");
+    setView("admin");
   };
 
   const handleMemberLoginSuccess = () => {
     setPendingRole("member");
   };
-
-  // When admin verification completes
-  useEffect(() => {
-    if (pendingRole === "admin" && isAdmin !== undefined) {
-      if (isAdmin) {
-        setView("admin");
-      } else {
-        // Not an admin – clear and go back to login
-        clear();
-        queryClient.clear();
-        setPendingRole(null);
-      }
-    }
-  }, [pendingRole, isAdmin, clear, queryClient]);
 
   // When member verification completes
   useEffect(() => {
@@ -72,7 +49,6 @@ export default function App() {
         setMemberData(memberProfile);
         setView("member");
       } else {
-        // Not found – clear identity and stay on login
         setPendingRole(null);
       }
     }
@@ -87,10 +63,7 @@ export default function App() {
   };
 
   const isVerifying =
-    !!identity &&
-    (isFetching ||
-      (pendingRole === "admin" && checkingAdmin) ||
-      (pendingRole === "member" && checkingMember));
+    !!identity && (isFetching || (pendingRole === "member" && checkingMember));
 
   if (isInitializing) {
     return (
