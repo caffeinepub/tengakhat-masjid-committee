@@ -5,9 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, EyeOff, Loader2, Lock, Moon, Shield, User } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import type { Member } from "../hooks/useQueries";
 
 const DEFAULT_CREDENTIALS = { username: "admin", password: "logmein" };
 
@@ -23,31 +20,23 @@ function getStoredCredentials(): { username: string; password: string } {
 
 interface Props {
   onAdminLogin: () => void;
-  onMemberLogin: () => void;
-  isVerifying: boolean;
-  memberData: Member | null;
-  pendingRole: "admin" | "member" | null;
-  onCancelVerify: () => void;
+  onMemberLogin: (username: string, pin: string) => void;
+  isMemberLoading: boolean;
+  memberError: string | null;
 }
 
 export default function LoginPage({
   onAdminLogin,
   onMemberLogin,
-  isVerifying,
-  memberData,
-  pendingRole,
-  onCancelVerify,
+  isMemberLoading,
+  memberError,
 }: Props) {
-  const { login, isLoggingIn, identity } = useInternetIdentity();
-
-  // Admin login state
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // Member login state
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [memberUsername, setMemberUsername] = useState("");
   const [memberPin, setMemberPin] = useState("");
-  const [pinVerified, setPinVerified] = useState(false);
 
   const handleAdminLogin = () => {
     const creds = getStoredCredentials();
@@ -55,37 +44,20 @@ export default function LoginPage({
       adminUsername.trim() !== creds.username ||
       adminPassword !== creds.password
     ) {
-      toast.error("Incorrect username or password");
+      setAdminError("Incorrect username or password");
       return;
     }
+    setAdminError(null);
     onAdminLogin();
   };
 
-  const handleMemberConnect = async () => {
-    try {
-      await login();
-      onMemberLogin();
-    } catch {
-      toast.error("Login failed. Please try again.");
-    }
+  const handleMemberLogin = () => {
+    if (!memberUsername.trim() || !memberPin.trim()) return;
+    onMemberLogin(memberUsername.trim(), memberPin.trim());
   };
-
-  const handleVerifyPin = () => {
-    if (!memberData) return;
-    if (memberPin === memberData.pin) {
-      setPinVerified(true);
-      toast.success("PIN verified! Entering dashboard...");
-    } else {
-      toast.error("Incorrect PIN. Please try again.");
-    }
-  };
-
-  const isLoadingMember =
-    (isLoggingIn || isVerifying) && pendingRole === "member";
 
   return (
     <div className="min-h-screen flex flex-col navy-gradient font-poppins">
-      {/* Header */}
       <header className="border-b border-gold/20 px-4 py-3">
         <div className="max-w-6xl mx-auto flex items-center gap-3">
           <div className="w-10 h-10 rounded-full border-2 border-gold overflow-hidden flex items-center justify-center bg-islamic/30">
@@ -102,10 +74,8 @@ export default function LoginPage({
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 items-center">
-          {/* Left: Branding */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -129,7 +99,6 @@ export default function LoginPage({
                 all in one secure platform.
               </p>
             </div>
-
             <div className="space-y-3">
               {[
                 {
@@ -147,7 +116,6 @@ export default function LoginPage({
                 </div>
               ))}
             </div>
-
             <div className="glass-card rounded-xl p-4">
               <p className="text-white/40 text-xs text-center">
                 بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ
@@ -158,7 +126,6 @@ export default function LoginPage({
             </div>
           </motion.div>
 
-          {/* Right: Login Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -191,7 +158,6 @@ export default function LoginPage({
                 </TabsTrigger>
               </TabsList>
 
-              {/* Admin Login */}
               <TabsContent value="admin" className="space-y-4">
                 <div className="space-y-3">
                   <div className="space-y-2">
@@ -205,7 +171,10 @@ export default function LoginPage({
                         type="text"
                         placeholder="Enter username"
                         value={adminUsername}
-                        onChange={(e) => setAdminUsername(e.target.value)}
+                        onChange={(e) => {
+                          setAdminUsername(e.target.value);
+                          setAdminError(null);
+                        }}
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleAdminLogin()
                         }
@@ -214,7 +183,6 @@ export default function LoginPage({
                       />
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <Label className="text-white/80 text-sm">Password</Label>
                     <div className="relative">
@@ -226,7 +194,10 @@ export default function LoginPage({
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter password"
                         value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
+                        onChange={(e) => {
+                          setAdminPassword(e.target.value);
+                          setAdminError(null);
+                        }}
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleAdminLogin()
                         }
@@ -246,8 +217,10 @@ export default function LoginPage({
                       </button>
                     </div>
                   </div>
+                  {adminError && (
+                    <p className="text-red-400 text-xs">{adminError}</p>
+                  )}
                 </div>
-
                 <Button
                   className="w-full btn-gold py-3 text-base font-semibold"
                   onClick={handleAdminLogin}
@@ -259,119 +232,71 @@ export default function LoginPage({
                 </Button>
               </TabsContent>
 
-              {/* Member Login */}
               <TabsContent value="member" className="space-y-4">
-                {!identity ? (
-                  <>
-                    <div className="rounded-xl bg-white/5 border border-gold/20 p-4 text-sm text-white/60">
-                      <p className="flex items-center gap-2">
-                        <User size={14} className="text-gold flex-shrink-0" />
-                        Connect with Internet Identity, then enter your PIN to
-                        access your member account.
-                      </p>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">Username</Label>
+                    <div className="relative">
+                      <User
+                        size={15}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Enter your username"
+                        value={memberUsername}
+                        onChange={(e) => setMemberUsername(e.target.value)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleMemberLogin()
+                        }
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9"
+                        data-ocid="login.member.username_input"
+                      />
                     </div>
-
-                    <Button
-                      className="w-full green-gradient text-white font-semibold py-3 rounded-xl hover:opacity-90"
-                      onClick={handleMemberConnect}
-                      disabled={isLoggingIn || isLoadingMember}
-                      data-ocid="login.member.primary_button"
-                    >
-                      {isLoadingMember ? (
-                        <>
-                          <Loader2 size={16} className="mr-2 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        <>
-                          <User size={16} className="mr-2" />
-                          Connect &amp; Login as Member
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : memberData === null && pendingRole === "member" ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl bg-destructive/20 border border-destructive/40 p-4 text-sm text-white/80">
-                      <p className="font-semibold mb-1">Account Not Found</p>
-                      <p className="text-white/60 text-xs">
-                        Your Internet Identity is not linked to any member
-                        account. Please share your Principal ID with your admin
-                        to register.
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="w-full text-white/50 hover:text-white text-sm"
-                      onClick={onCancelVerify}
-                      data-ocid="login.cancel_button"
-                    >
-                      Go Back
-                    </Button>
                   </div>
-                ) : memberData ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl bg-primary/20 border border-primary/40 p-3 text-sm">
-                      <p className="text-white/80">
-                        Welcome,{" "}
-                        <span className="text-gold font-semibold">
-                          {memberData.name}
-                        </span>
-                      </p>
-                      <p className="text-white/50 text-xs mt-0.5">
-                        Serial #{memberData.serialNumber.toString()}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-white/80 text-sm">Enter PIN</Label>
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">PIN</Label>
+                    <div className="relative">
+                      <Lock
+                        size={15}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"
+                      />
                       <Input
                         type="password"
-                        placeholder="Your PIN"
+                        placeholder="Enter your PIN"
                         value={memberPin}
                         onChange={(e) => setMemberPin(e.target.value)}
                         onKeyDown={(e) =>
-                          e.key === "Enter" && handleVerifyPin()
+                          e.key === "Enter" && handleMemberLogin()
                         }
                         maxLength={6}
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold text-center text-xl tracking-widest"
-                        data-ocid="login.member.input"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-gold pl-9 text-center tracking-widest"
+                        data-ocid="login.member.pin_input"
                       />
                     </div>
-
-                    <Button
-                      className="w-full btn-gold py-3 text-base font-semibold"
-                      onClick={handleVerifyPin}
-                      disabled={pinVerified || !memberPin}
-                      data-ocid="login.member.submit_button"
-                    >
-                      {pinVerified ? (
-                        <>
-                          <Loader2 size={16} className="mr-2 animate-spin" />
-                          Entering Dashboard...
-                        </>
-                      ) : (
-                        <>
-                          <Lock size={16} className="mr-2" />
-                          Verify PIN
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      className="w-full text-white/50 hover:text-white text-sm"
-                      onClick={onCancelVerify}
-                      data-ocid="login.cancel_button"
-                    >
-                      Use different account
-                    </Button>
                   </div>
-                ) : (
-                  <div className="flex justify-center py-6">
-                    <Loader2 size={28} className="text-gold animate-spin" />
-                  </div>
-                )}
+                  {memberError && (
+                    <p className="text-red-400 text-xs">{memberError}</p>
+                  )}
+                </div>
+                <Button
+                  className="w-full green-gradient text-white font-semibold py-3 rounded-xl hover:opacity-90"
+                  onClick={handleMemberLogin}
+                  disabled={!memberUsername || !memberPin || isMemberLoading}
+                  data-ocid="login.member.primary_button"
+                >
+                  {isMemberLoading ? (
+                    <>
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <User size={16} className="mr-2" />
+                      Login as Member
+                    </>
+                  )}
+                </Button>
               </TabsContent>
             </Tabs>
 
@@ -384,7 +309,6 @@ export default function LoginPage({
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-gold/10 py-4 px-4">
         <p className="text-white/30 text-xs text-center">
           © {new Date().getFullYear()} Tengakhat Masjid Committee · Built with ❤️

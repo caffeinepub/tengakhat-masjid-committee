@@ -8,14 +8,12 @@ import type {
   UserProfile,
 } from "../backend.d.ts";
 import { useActor } from "./useActor";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 export type { Admin, Member, PaymentRecord, UpiSettings, UserProfile };
 
 function useActorEnabled() {
   const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  return { actor, enabled: !!actor && !isFetching && !!identity };
+  return { actor, enabled: !!actor && !isFetching };
 }
 
 export function useIsAdmin() {

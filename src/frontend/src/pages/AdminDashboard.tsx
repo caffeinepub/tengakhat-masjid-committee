@@ -30,7 +30,6 @@ import { Principal } from "@dfinity/principal";
 import {
   ChevronDown,
   ChevronUp,
-  Copy,
   CreditCard,
   History,
   KeyRound,
@@ -48,7 +47,6 @@ import { AnimatePresence, motion } from "motion/react";
 import React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useAddAdmin,
   useAddMember,
@@ -742,7 +740,6 @@ function ManageAdminsTab() {
 }
 
 export default function AdminDashboard({ onLogout }: Props) {
-  const { identity } = useInternetIdentity();
   const { data: members = [], isLoading: membersLoading } = useMembers();
   const { data: upiSettings } = useUpiSettings();
   const addMember = useAddMember();
@@ -755,7 +752,6 @@ export default function AdminDashboard({ onLogout }: Props) {
   const [showChangePw, setShowChangePw] = useState(false);
 
   const [form, setForm] = useState({
-    principalId: "",
     username: "",
     pin: "",
     name: "",
@@ -766,7 +762,6 @@ export default function AdminDashboard({ onLogout }: Props) {
 
   const handleAddMember = async () => {
     const requiredFields = [
-      form.principalId,
       form.username,
       form.pin,
       form.name,
@@ -778,13 +773,8 @@ export default function AdminDashboard({ onLogout }: Props) {
       toast.error("Please fill all required fields");
       return;
     }
-    let principal: Principal;
-    try {
-      principal = Principal.fromText(form.principalId);
-    } catch {
-      toast.error("Invalid Principal ID format");
-      return;
-    }
+    const randomBytes = crypto.getRandomValues(new Uint8Array(29));
+    const principal = Principal.fromUint8Array(randomBytes);
     try {
       await addMember.mutateAsync({
         principal,
@@ -797,7 +787,6 @@ export default function AdminDashboard({ onLogout }: Props) {
       toast.success(`${form.name} added successfully!`);
       setShowAddModal(false);
       setForm({
-        principalId: "",
         username: "",
         pin: "",
         name: "",
@@ -806,7 +795,7 @@ export default function AdminDashboard({ onLogout }: Props) {
         monthlyContribution: "",
       });
     } catch {
-      toast.error("Failed to add member. Check the Principal ID.");
+      toast.error("Failed to add member");
     }
   };
 
@@ -833,8 +822,6 @@ export default function AdminDashboard({ onLogout }: Props) {
       toast.error("Failed to save UPI ID");
     }
   };
-
-  const myPrincipal = identity?.getPrincipal().toString();
 
   return (
     <div className="min-h-screen flex flex-col navy-gradient font-poppins">
@@ -945,29 +932,6 @@ export default function AdminDashboard({ onLogout }: Props) {
                   Add Member
                 </Button>
               </div>
-
-              {/* Principal ID info box */}
-              {myPrincipal && (
-                <div className="glass-card rounded-xl p-3 flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gold/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Copy size={13} className="text-gold" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-white/70 text-xs font-medium">
-                      Your Principal ID (share with members so they can
-                      self-register):
-                    </p>
-                    <p className="text-gold/80 text-xs font-mono mt-0.5 truncate">
-                      {myPrincipal}
-                    </p>
-                    <p className="text-white/40 text-xs mt-1">
-                      When adding a member, paste their Principal ID — they can
-                      find it by clicking &quot;Connect &amp; Login as
-                      Member&quot; on the login page.
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {/* Members Table */}
               {membersLoading ? (
@@ -1158,28 +1122,6 @@ export default function AdminDashboard({ onLogout }: Props) {
             <DialogTitle className="text-white">Add New Member</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="rounded-lg bg-gold/10 border border-gold/20 p-3 text-xs text-white/60">
-              <p className="font-medium text-gold/80 mb-1">
-                How to get Principal ID:
-              </p>
-              <p>
-                Ask the member to open the app, go to Member Login tab, click
-                &quot;Connect &amp; Login as Member&quot;, then copy their
-                Principal ID from their profile page.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-white/80">Principal ID *</Label>
-              <Input
-                placeholder="Member's Internet Identity Principal"
-                value={form.principalId}
-                onChange={(e) =>
-                  setForm({ ...form, principalId: e.target.value })
-                }
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono text-xs"
-                data-ocid="admin.members.input"
-              />
-            </div>
             {(
               [
                 ["name", "Full Name *", "e.g. Ahmed Khan"],
