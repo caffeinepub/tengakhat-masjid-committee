@@ -52,7 +52,6 @@ export default function DashboardPage() {
 
   const totalMembers = members?.length ?? 0;
 
-  // Build payment status map for selected month
   const paymentMap = new Map<string, bigint>();
   for (const p of payments ?? []) {
     paymentMap.set(String(p.memberId), p.amountPaid);
@@ -95,24 +94,32 @@ export default function DashboardPage() {
   const loading = membersLoading || paymentsLoading;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
-          <p className="text-muted-foreground text-sm">
+          <h2
+            className="text-2xl font-bold"
+            style={{ color: "rgba(212, 175, 55, 1)" }}
+          >
+            Dashboard
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.65)" }} className="text-sm">
             Overview for {MONTHS[month - 1]} {year}
           </p>
         </div>
 
         {/* Month/Year filter */}
         <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <Calendar className="w-4 h-4" style={{ color: "#D4AF37" }} />
           <Select
             value={String(month)}
             onValueChange={(v) => setMonth(Number(v))}
           >
-            <SelectTrigger data-ocid="dashboard.month.select" className="w-36">
+            <SelectTrigger
+              data-ocid="dashboard.month.select"
+              className="w-36 bg-white/90"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -127,7 +134,10 @@ export default function DashboardPage() {
             value={String(year)}
             onValueChange={(v) => setYear(Number(v))}
           >
-            <SelectTrigger data-ocid="dashboard.year.select" className="w-28">
+            <SelectTrigger
+              data-ocid="dashboard.year.select"
+              className="w-28 bg-white/90"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -145,18 +155,18 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           loading={loading}
-          icon={<Users className="w-5 h-5 text-navy" />}
+          icon={<Users className="w-5 h-5" style={{ color: "#00A859" }} />}
           label="Total Members"
           value={String(totalMembers)}
-          color="#1e3a8a"
+          accentColor="#00A859"
           data-ocid="dashboard.members.card"
         />
         <StatCard
           loading={loading}
-          icon={<TrendingUp className="w-5 h-5 text-islamic" />}
+          icon={<TrendingUp className="w-5 h-5" style={{ color: "#D4AF37" }} />}
           label="Collected This Month"
           value={`₹${Number(totalCollected).toLocaleString()}`}
-          color="#00A859"
+          accentColor="#D4AF37"
           data-ocid="dashboard.collected.card"
         />
         <StatCard
@@ -164,13 +174,19 @@ export default function DashboardPage() {
           icon={<AlertCircle className="w-5 h-5 text-red-500" />}
           label="Pending Dues"
           value={`₹${Number(totalPending).toLocaleString()}`}
-          color="#ef4444"
+          accentColor="#ef4444"
           data-ocid="dashboard.pending.card"
         />
       </div>
 
       {/* Chart */}
-      <Card data-ocid="dashboard.chart_point">
+      <Card
+        data-ocid="dashboard.chart_point"
+        style={{
+          background: "rgba(255,255,255,0.95)",
+          border: "1px solid rgba(212, 175, 55, 0.3)",
+        }}
+      >
         <CardHeader>
           <CardTitle className="text-base font-semibold">
             Payment Status — {MONTHS[month - 1]} {year}
@@ -212,7 +228,12 @@ export default function DashboardPage() {
 
       {/* Summary Table */}
       {!loading && totalMembers > 0 && (
-        <Card>
+        <Card
+          style={{
+            background: "rgba(255,255,255,0.95)",
+            border: "1px solid rgba(212, 175, 55, 0.3)",
+          }}
+        >
           <CardHeader>
             <CardTitle className="text-base font-semibold">Summary</CardTitle>
           </CardHeader>
@@ -247,21 +268,25 @@ function StatCard({
   icon,
   label,
   value,
-  color,
+  accentColor,
   "data-ocid": ocid,
 }: {
   loading: boolean;
   icon: React.ReactNode;
   label: string;
   value: string;
-  color: string;
+  accentColor: string;
   "data-ocid"?: string;
 }) {
   return (
     <div
-      className="stat-card"
       data-ocid={ocid}
-      style={{ borderTop: `3px solid ${color}` }}
+      className="rounded-xl shadow-sm p-6 flex flex-col gap-2"
+      style={{
+        background: "rgba(255, 255, 255, 0.95)",
+        border: "1px solid rgba(212, 175, 55, 0.3)",
+        borderTop: `3px solid ${accentColor}`,
+      }}
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-muted-foreground">
@@ -269,7 +294,7 @@ function StatCard({
         </span>
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: `${color}18` }}
+          style={{ backgroundColor: `${accentColor}18` }}
         >
           {icon}
         </div>

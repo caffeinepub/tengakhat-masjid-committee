@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Loader2, Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -22,7 +22,6 @@ export default function LoginPage({ onLogin }: Props) {
     setError("");
     setLoading(true);
 
-    // Simulate slight delay for UX
     await new Promise((r) => setTimeout(r, 400));
 
     if (username.trim() === "admin" && password === "logmein") {
@@ -40,7 +39,7 @@ export default function LoginPage({ onLogin }: Props) {
       className="min-h-screen flex items-center justify-center p-4"
       style={{
         background:
-          "linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #00A859 100%)",
+          "linear-gradient(135deg, #1e3a8a 0%, #1a2f6e 60%, #7a5c00 100%)",
       }}
     >
       <motion.div
@@ -49,28 +48,45 @@ export default function LoginPage({ onLogin }: Props) {
         transition={{ duration: 0.4 }}
         className="w-full max-w-sm"
       >
-        <Card className="shadow-2xl border-0">
+        <Card
+          className="shadow-2xl"
+          style={{
+            border: "2px solid rgba(212, 175, 55, 0.6)",
+            background: "rgba(255, 255, 255, 0.97)",
+          }}
+        >
           <CardHeader className="text-center pb-2 pt-8">
+            {/* Logo — bigger */}
             <div className="flex justify-center mb-4">
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{
-                  background: "linear-gradient(135deg, #1e3a8a, #2563eb)",
-                }}
-              >
-                <Building2 className="w-8 h-8 text-white" />
-              </div>
+              <img
+                src="/assets/generated/tmc-logo-transparent.dim_600x200.png"
+                alt="Tengakhat Masjid Committee"
+                className="h-28 w-auto object-contain"
+                style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.2))" }}
+              />
             </div>
-            <h1 className="text-xl font-bold text-foreground leading-tight">
-              Tengakhat Masjid Committee
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">Admin Login</p>
+            <p className="text-sm font-semibold" style={{ color: "#004d26" }}>
+              Admin Login
+            </p>
           </CardHeader>
 
           <CardContent className="px-6 pb-8 pt-4">
+            {/* Gold divider */}
+            <div
+              className="h-0.5 w-full mb-5 rounded"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent, #D4AF37, transparent)",
+              }}
+            />
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="username">Username</Label>
+                <Label
+                  htmlFor="username"
+                  className="font-semibold text-gray-700"
+                >
+                  Username
+                </Label>
                 <Input
                   id="username"
                   data-ocid="login.input"
@@ -85,7 +101,12 @@ export default function LoginPage({ onLogin }: Props) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label
+                  htmlFor="password"
+                  className="font-semibold text-gray-700"
+                >
+                  Password
+                </Label>
                 <Input
                   id="password"
                   data-ocid="login.password.input"
@@ -110,7 +131,11 @@ export default function LoginPage({ onLogin }: Props) {
               <Button
                 type="submit"
                 data-ocid="login.submit_button"
-                className="w-full bg-primary hover:bg-primary/90 text-white font-semibold h-11"
+                className="w-full text-white font-semibold h-11"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #006633 0%, #00A859 100%)",
+                }}
                 disabled={loading}
               >
                 {loading ? (
@@ -129,7 +154,10 @@ export default function LoginPage({ onLogin }: Props) {
           </CardContent>
         </Card>
 
-        <p className="text-center text-white/60 text-xs mt-6">
+        <p
+          className="text-center text-xs mt-6 font-medium"
+          style={{ color: "rgba(255, 220, 100, 0.95)" }}
+        >
           © {new Date().getFullYear()} Tengakhat Masjid Committee
         </p>
       </motion.div>

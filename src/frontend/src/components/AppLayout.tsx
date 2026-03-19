@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import {
-  Building2,
   CreditCard,
   LayoutDashboard,
   LogOut,
@@ -51,24 +50,22 @@ export default function AppLayout({ onLogout }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="app-header text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo + Title */}
+          <div className="flex items-center justify-between h-20">
+            {/* Logo — bigger */}
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-bold leading-tight">
-                  Tengakhat Masjid Committee
-                </h1>
-                <p className="text-white/60 text-xs hidden sm:block">
-                  Member Fee Management
-                </p>
-              </div>
+              <img
+                src="/assets/generated/tmc-logo-transparent.dim_600x200.png"
+                alt="Tengakhat Masjid Committee"
+                className="h-16 w-auto object-contain"
+                style={{
+                  filter:
+                    "drop-shadow(0 1px 4px rgba(0,0,0,0.5)) brightness(1.1)",
+                }}
+              />
             </div>
 
             {/* Desktop Nav */}
@@ -82,7 +79,7 @@ export default function AppLayout({ onLogout }: Props) {
                   className={`nav-tab ${
                     activeTab === tab.id
                       ? "bg-white/20 text-white font-semibold"
-                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                      : "text-white hover:bg-white/10"
                   }`}
                 >
                   {tab.icon}
@@ -94,7 +91,7 @@ export default function AppLayout({ onLogout }: Props) {
                 size="sm"
                 data-ocid="nav.logout.button"
                 onClick={onLogout}
-                className="ml-2 text-white/70 hover:text-white hover:bg-white/10"
+                className="ml-2 text-white hover:text-white hover:bg-white/10"
               >
                 <LogOut className="w-4 h-4 mr-1" />
                 Logout
@@ -124,7 +121,8 @@ export default function AppLayout({ onLogout }: Props) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-white/10 bg-navy-dark"
+              className="md:hidden border-t border-white/10"
+              style={{ background: "rgba(0, 70, 35, 0.97)" }}
             >
               <div className="px-4 py-3 space-y-1">
                 {tabs.map((tab) => (
@@ -136,7 +134,7 @@ export default function AppLayout({ onLogout }: Props) {
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                       activeTab === tab.id
                         ? "bg-white/20 text-white"
-                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                        : "text-white hover:bg-white/10"
                     }`}
                   >
                     {tab.icon}
@@ -147,7 +145,7 @@ export default function AppLayout({ onLogout }: Props) {
                   type="button"
                   data-ocid="nav.mobile.logout.button"
                   onClick={onLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-all"
                 >
                   <LogOut className="w-4 h-4" />
                   Logout
@@ -174,14 +172,21 @@ export default function AppLayout({ onLogout }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-white py-4 text-center text-xs text-muted-foreground">
+      <footer
+        className="border-t py-4 text-center text-xs"
+        style={{
+          borderColor: "rgba(212, 175, 55, 0.3)",
+          background: "rgba(0, 0, 0, 0.3)",
+          color: "rgba(212, 175, 55, 0.9)",
+        }}
+      >
         © {new Date().getFullYear()} Tengakhat Masjid Committee. Built with ❤️
         using{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline hover:text-foreground"
+          className="underline hover:text-white"
         >
           caffeine.ai
         </a>
