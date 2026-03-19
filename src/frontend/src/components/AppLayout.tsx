@@ -13,9 +13,10 @@ import { useState } from "react";
 import DashboardPage from "../pages/DashboardPage";
 import MembersPage from "../pages/MembersPage";
 import PaymentsPage from "../pages/PaymentsPage";
+import ReportsTab from "../pages/ReportsTab";
 import SettingsPage from "../pages/SettingsPage";
 
-type Tab = "dashboard" | "members" | "payments" | "settings";
+type Tab = "dashboard" | "members" | "payments" | "reports" | "settings";
 
 interface Props {
   onLogout: () => void;
@@ -31,6 +32,11 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
     id: "payments",
     label: "Payments",
+    icon: <CreditCard className="w-4 h-4" />,
+  },
+  {
+    id: "reports",
+    label: "Reports",
     icon: <CreditCard className="w-4 h-4" />,
   },
   {
@@ -55,16 +61,12 @@ export default function AppLayout({ onLogout }: Props) {
       <header className="app-header text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-24">
-            {/* Logo — larger */}
+            {/* Logo */}
             <div className="flex items-center gap-3">
               <img
-                src="/assets/generated/tmc-logo-transparent.dim_700x220.png"
+                src="/assets/generated/tmc-logo-v2.dim_700x200.png"
                 alt="Tengakhat Masjid Committee"
                 className="h-20 w-auto object-contain"
-                style={{
-                  filter:
-                    "drop-shadow(0 1px 6px rgba(0,0,0,0.6)) brightness(1.15)",
-                }}
               />
             </div>
 
@@ -167,6 +169,7 @@ export default function AppLayout({ onLogout }: Props) {
           {activeTab === "dashboard" && <DashboardPage />}
           {activeTab === "members" && <MembersPage />}
           {activeTab === "payments" && <PaymentsPage />}
+          {activeTab === "reports" && <ReportsTab />}
           {activeTab === "settings" && <SettingsPage />}
         </motion.div>
       </main>

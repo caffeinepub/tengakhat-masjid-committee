@@ -27,8 +27,9 @@ import {
   Plus,
   Search,
   Trash2,
+  User,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Member } from "../backend";
 import PaymentModal from "../components/PaymentModal";
@@ -61,11 +62,17 @@ export default function MembersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<Member | null>(null);
   const [formError, setFormError] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: members, isLoading } = useMembers();
   const addMember = useAddMember();
   const updateMember = useUpdateMember();
   const deleteMember = useDeleteMember();
+
+  // Photos stored in localStorage by memberId
+  const getPhotos = (): Record<string, string> =>
+    JSON.parse(localStorage.getItem("tmc_member_photos") ?? "{}");
 
   const filtered = (members ?? []).filter(
     (m) =>
@@ -77,6 +84,7 @@ export default function MembersPage() {
     setEditMember(null);
     setForm(emptyForm);
     setFormError("");
+    setPhotoPreview(null);
     setModalOpen(true);
   }
 
@@ -89,7 +97,19 @@ export default function MembersPage() {
       monthlyFee: String(member.monthlyFee),
     });
     setFormError("");
+    const photos = getPhotos();
+    setPhotoPreview(photos[String(member.memberId)] ?? null);
     setModalOpen(true);
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -119,14 +139,26 @@ export default function MembersPage() {
           address: form.address.trim(),
           monthlyFee: fee,
         });
+        // Save photo
+        if (photoPreview) {
+          const photos = getPhotos();
+          photos[String(editMember.memberId)] = photoPreview;
+          localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
+        }
         toast.success("Member updated successfully");
       } else {
-        await addMember.mutateAsync({
+        const newId = await addMember.mutateAsync({
           name: form.name.trim(),
           phone: form.phone.trim(),
           address: form.address.trim(),
           monthlyFee: fee,
         });
+        // Save photo for new member
+        if (photoPreview && newId) {
+          const photos = getPhotos();
+          photos[String(newId)] = photoPreview;
+          localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
+        }
         toast.success("Member added successfully");
       }
       setModalOpen(false);
@@ -143,6 +175,10 @@ export default function MembersPage() {
     if (!deleteTarget) return;
     try {
       await deleteMember.mutateAsync(deleteTarget.memberId);
+      // Remove photo
+      const photos = getPhotos();
+      delete photos[String(deleteTarget.memberId)];
+      localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
       toast.success("Member deleted");
       setDeleteTarget(null);
     } catch (err) {
@@ -152,6 +188,7 @@ export default function MembersPage() {
   }
 
   const isSaving = addMember.isPending || updateMember.isPending;
+  const photos = getPhotos();
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -214,6 +251,9 @@ export default function MembersPage() {
               <thead className="bg-secondary/60 border-b border-border">
                 <tr>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">
+                    Photo
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">
                     Member ID
                   </th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">
@@ -240,6 +280,24 @@ export default function MembersPage() {
                     data-ocid={`members.item.${idx + 1}`}
                     className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors"
                   >
+                    <td className="px-4 py-3">
+                      <div
+                        className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center"
+                        style={{ borderColor: "#D4AF37" }}
+                      >
+                        {photos[String(member.memberId)] ? (
+                          <img
+                            src={photos[String(member.memberId)]}
+                            alt={member.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-green-50">
+                            <User className="w-5 h-5 text-green-700" />
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className="font-mono text-xs">
                         #{String(member.memberId)}
@@ -303,7 +361,23 @@ export default function MembersPage() {
                 data-ocid={`members.item.${idx + 1}`}
                 className="bg-white rounded-xl border border-border p-4 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-12 h-12 rounded-full overflow-hidden border-2 flex-shrink-0"
+                    style={{ borderColor: "#D4AF37" }}
+                  >
+                    {photos[String(member.memberId)] ? (
+                      <img
+                        src={photos[String(member.memberId)]}
+                        alt={member.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-green-50">
+                        <User className="w-6 h-6 text-green-700" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="font-mono text-xs">
@@ -329,7 +403,6 @@ export default function MembersPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      data-ocid={`members.item.${idx + 1}.edit_button`}
                       onClick={() => openEditModal(member)}
                       className="h-8 w-8 text-blue-600"
                     >
@@ -338,7 +411,6 @@ export default function MembersPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      data-ocid={`members.item.${idx + 1}.delete_button`}
                       onClick={() => setDeleteTarget(member)}
                       className="h-8 w-8 text-destructive"
                     >
@@ -347,7 +419,6 @@ export default function MembersPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      data-ocid={`members.item.${idx + 1}.payment_button`}
                       onClick={() => setPaymentTarget(member)}
                       className="h-8 w-8 text-primary"
                     >
@@ -373,6 +444,44 @@ export default function MembersPage() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
+            {/* Photo upload */}
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                className="w-20 h-20 rounded-full overflow-hidden border-4 flex items-center justify-center cursor-pointer p-0"
+                style={{ borderColor: "#D4AF37" }}
+                onClick={() => fileInputRef.current?.click()}
+                title="Click to upload photo"
+                aria-label="Upload member photo"
+              >
+                {photoPreview ? (
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-green-50">
+                    <User className="w-8 h-8 text-green-600" />
+                  </div>
+                )}
+              </button>
+              <button
+                type="button"
+                className="text-xs text-primary underline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {photoPreview ? "Change Photo" : "Upload Photo (optional)"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="m-name">Full Name *</Label>
               <Input

@@ -1,0 +1,476 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { KeyRound, LogOut, User } from "lucide-react";
+import { motion } from "motion/react";
+import { useState } from "react";
+import { toast } from "sonner";
+import UpiPaymentPanel from "../components/UpiPaymentPanel";
+import { useAllPayments, useMembers } from "../hooks/useQueries";
+
+interface Props {
+  memberId: string;
+  onLogout: () => void;
+}
+
+type MemberTab = "profile" | "history" | "status" | "pay" | "pin";
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const TAB_LIST: { id: MemberTab; label: string }[] = [
+  { id: "profile", label: "Profile" },
+  { id: "history", label: "Pay History" },
+  { id: "status", label: "Monthly Status" },
+  { id: "pay", label: "Pay Now" },
+  { id: "pin", label: "Change PIN" },
+];
+
+export default function MemberPortal({ memberId, onLogout }: Props) {
+  const [activeTab, setActiveTab] = useState<MemberTab>("profile");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinError, setPinError] = useState("");
+
+  const { data: allMembers } = useMembers();
+  const { data: allPayments } = useAllPayments();
+
+  const member = allMembers?.find((m) => String(m.memberId) === memberId);
+
+  const myPayments = (allPayments ?? []).filter(
+    (p) => String(p.memberId) === memberId,
+  );
+
+  const photos: Record<string, string> = JSON.parse(
+    localStorage.getItem("tmc_member_photos") ?? "{}",
+  );
+  const photo = photos[memberId];
+
+  function handlePinChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPinError("");
+    if (newPin.length < 4) {
+      setPinError("PIN must be at least 4 digits.");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError("PINs do not match.");
+      return;
+    }
+    const pins: Record<string, string> = JSON.parse(
+      localStorage.getItem("tmc_member_pins") ?? "{}",
+    );
+    pins[memberId] = newPin;
+    localStorage.setItem("tmc_member_pins", JSON.stringify(pins));
+    toast.success("PIN changed successfully!");
+    setNewPin("");
+    setConfirmPin("");
+  }
+
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="app-header text-white shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            <img
+              src="/assets/generated/tmc-logo-v2.dim_700x200.png"
+              alt="Tengakhat Masjid Committee"
+              className="h-14 w-auto object-contain"
+            />
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:block text-sm font-medium text-white/90">
+                Member #{memberId}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLogout}
+                className="text-white hover:text-white hover:bg-white/10"
+              >
+                <LogOut className="w-4 h-4 mr-1" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Tab Bar */}
+      <div
+        className="border-b sticky top-20 z-40"
+        style={{
+          background: "rgba(0,60,30,0.97)",
+          borderColor: "rgba(212,175,55,0.3)",
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto py-1">
+          {TAB_LIST.map((tab) => (
+            <button
+              type="button"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "bg-white/20 text-white font-semibold"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          {/* PROFILE */}
+          {activeTab === "profile" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">My Profile</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center mb-6">
+                  <div
+                    className="w-24 h-24 rounded-full overflow-hidden border-4 flex items-center justify-center"
+                    style={{ borderColor: "#D4AF37" }}
+                  >
+                    {photo ? (
+                      <img
+                        src={photo}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ background: "#e8f5ee" }}
+                      >
+                        <User
+                          className="w-12 h-12"
+                          style={{ color: "#006633" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Photo managed by admin
+                  </p>
+                </div>
+                {member ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div
+                        className="p-3 rounded-lg"
+                        style={{ background: "#f0f9f4" }}
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          Member ID
+                        </p>
+                        <p className="font-bold" style={{ color: "#004d26" }}>
+                          #{String(member.memberId)}
+                        </p>
+                      </div>
+                      <div
+                        className="p-3 rounded-lg"
+                        style={{ background: "#f0f9f4" }}
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          Monthly Fee
+                        </p>
+                        <p className="font-bold" style={{ color: "#004d26" }}>
+                          ₹{Number(member.monthlyFee).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{ background: "#f0f9f4" }}
+                    >
+                      <p className="text-xs text-muted-foreground">Full Name</p>
+                      <p className="font-semibold">{member.name}</p>
+                    </div>
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{ background: "#f0f9f4" }}
+                    >
+                      <p className="text-xs text-muted-foreground">Phone</p>
+                      <p className="font-semibold">{member.phone}</p>
+                    </div>
+                    {member.address && (
+                      <div
+                        className="p-3 rounded-lg"
+                        style={{ background: "#f0f9f4" }}
+                      >
+                        <p className="text-xs text-muted-foreground">Address</p>
+                        <p className="font-semibold">{member.address}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    Member data not found. Please contact admin.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PAYMENT HISTORY */}
+          {activeTab === "history" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">
+                  Payment History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {myPayments.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <p className="text-3xl mb-2">💳</p>
+                    <p>No payments recorded yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[...myPayments]
+                      .sort(
+                        (a, b) => Number(b.paymentDate) - Number(a.paymentDate),
+                      )
+                      .map((p) => (
+                        <div
+                          key={String(p.paymentId)}
+                          className="flex items-center justify-between p-3 rounded-lg border"
+                          style={{ borderColor: "rgba(212,175,55,0.3)" }}
+                        >
+                          <div>
+                            <p className="font-semibold text-sm">
+                              {MONTHS[Number(p.month) - 1]} {String(p.year)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {p.paymentMode} •{" "}
+                              {new Date(
+                                Number(p.paymentDate) / 1_000_000,
+                              ).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p
+                              className="font-bold"
+                              style={{ color: "#004d26" }}
+                            >
+                              ₹{Number(p.amountPaid).toLocaleString()}
+                            </p>
+                            <span
+                              className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                p.status === "Paid"
+                                  ? "bg-green-100 text-green-700"
+                                  : p.status === "Partial"
+                                    ? "bg-yellow-100 text-yellow-700"
+                                    : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {p.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* MONTHLY STATUS */}
+          {activeTab === "status" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">
+                  Monthly Status — {currentYear}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {MONTHS.map((month, idx) => {
+                    const monthNum = idx + 1;
+                    const payment = myPayments.find(
+                      (p) =>
+                        Number(p.month) === monthNum &&
+                        Number(p.year) === currentYear,
+                    );
+                    return (
+                      <div
+                        key={month}
+                        className={`p-3 rounded-lg text-center text-sm font-medium border ${
+                          payment?.status === "Paid"
+                            ? "bg-green-50 border-green-200 text-green-800"
+                            : payment?.status === "Partial"
+                              ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                              : "bg-red-50 border-red-200 text-red-700"
+                        }`}
+                      >
+                        <p className="font-bold">{month}</p>
+                        <p className="text-xs mt-0.5">
+                          {payment?.status ?? "Unpaid"}
+                        </p>
+                        {payment && (
+                          <p className="text-xs font-bold mt-0.5">
+                            ₹{Number(payment.amountPaid).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PAY NOW */}
+          {activeTab === "pay" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">
+                  Make a UPI Payment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {member ? (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Scan the QR code or tap a button below to pay your monthly
+                      fee of{" "}
+                      <span className="font-semibold text-foreground">
+                        ₹{Number(member.monthlyFee).toLocaleString()}
+                      </span>
+                      . After payment, inform the admin to mark it as paid.
+                    </p>
+                    <UpiPaymentPanel
+                      amount={Number(member.monthlyFee)}
+                      memberName={member.name}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    Member data not found. Please contact admin.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* CHANGE PIN */}
+          {activeTab === "pin" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">Change PIN</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handlePinChange} className="space-y-4 max-w-xs">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-pin">New PIN</Label>
+                    <Input
+                      id="new-pin"
+                      type="password"
+                      placeholder="Min 4 digits"
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value)}
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirm-pin">Confirm PIN</Label>
+                    <Input
+                      id="confirm-pin"
+                      type="password"
+                      placeholder="Confirm new PIN"
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value)}
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  {pinError && (
+                    <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                      {pinError}
+                    </p>
+                  )}
+                  <Button
+                    type="submit"
+                    className="text-white font-semibold"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #006633 0%, #00A859 100%)",
+                    }}
+                  >
+                    <KeyRound className="w-4 h-4 mr-2" />
+                    Update PIN
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </main>
+
+      <footer
+        className="border-t py-4 text-center text-xs"
+        style={{
+          borderColor: "rgba(212,175,55,0.3)",
+          background: "rgba(0,0,0,0.3)",
+          color: "rgba(212,175,55,0.9)",
+        }}
+      >
+        © {new Date().getFullYear()} Tengakhat Masjid Committee
+      </footer>
+    </div>
+  );
+}

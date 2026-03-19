@@ -2,39 +2,60 @@ import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
+import MemberPortal from "./pages/MemberPortal";
 
-const SESSION_KEY = "tmc_admin_session";
+const ADMIN_SESSION_KEY = "tmc_admin_session";
+const MEMBER_SESSION_KEY = "tmc_member_session";
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return localStorage.getItem(SESSION_KEY) === "true";
+  const [adminLoggedIn, setAdminLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem(ADMIN_SESSION_KEY) === "true";
+  });
+  const [memberSession, setMemberSession] = useState<string | null>(() => {
+    return localStorage.getItem(MEMBER_SESSION_KEY);
   });
 
   useEffect(() => {
     const check = () => {
-      setIsLoggedIn(localStorage.getItem(SESSION_KEY) === "true");
+      setAdminLoggedIn(localStorage.getItem(ADMIN_SESSION_KEY) === "true");
+      setMemberSession(localStorage.getItem(MEMBER_SESSION_KEY));
     };
     window.addEventListener("storage", check);
     return () => window.removeEventListener("storage", check);
   }, []);
 
-  function handleLogin() {
-    localStorage.setItem(SESSION_KEY, "true");
-    setIsLoggedIn(true);
+  function handleAdminLogin() {
+    localStorage.setItem(ADMIN_SESSION_KEY, "true");
+    setAdminLoggedIn(true);
   }
 
-  function handleLogout() {
-    localStorage.removeItem(SESSION_KEY);
-    setIsLoggedIn(false);
+  function handleAdminLogout() {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    setAdminLoggedIn(false);
+  }
+
+  function handleMemberLogin(memberId: string) {
+    localStorage.setItem(MEMBER_SESSION_KEY, memberId);
+    setMemberSession(memberId);
+  }
+
+  function handleMemberLogout() {
+    localStorage.removeItem(MEMBER_SESSION_KEY);
+    setMemberSession(null);
   }
 
   return (
     <>
       <Toaster position="top-right" richColors />
-      {isLoggedIn ? (
-        <AppLayout onLogout={handleLogout} />
+      {adminLoggedIn ? (
+        <AppLayout onLogout={handleAdminLogout} />
+      ) : memberSession ? (
+        <MemberPortal memberId={memberSession} onLogout={handleMemberLogout} />
       ) : (
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage
+          onAdminLogin={handleAdminLogin}
+          onMemberLogin={handleMemberLogin}
+        />
       )}
     </>
   );

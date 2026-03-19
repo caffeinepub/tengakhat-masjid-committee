@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getActor } from "../actor";
 import type { Member, Payment } from "../backend";
+import { withRetry } from "../utils/retryActor";
 
 // ── Members ──────────────────────────────────────────────────────────────────
 
@@ -9,7 +10,7 @@ export function useMembers() {
     queryKey: ["members"],
     queryFn: async () => {
       const actor = await getActor();
-      return actor.getAllMembers();
+      return withRetry(() => actor.getAllMembers());
     },
   });
 }
@@ -24,11 +25,13 @@ export function useAddMember() {
       monthlyFee: number;
     }) => {
       const actor = await getActor();
-      return actor.addMember(
-        data.name,
-        data.phone,
-        data.address,
-        BigInt(data.monthlyFee),
+      return withRetry(() =>
+        actor.addMember(
+          data.name,
+          data.phone,
+          data.address,
+          BigInt(data.monthlyFee),
+        ),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["members"] }),
@@ -46,12 +49,14 @@ export function useUpdateMember() {
       monthlyFee: number;
     }) => {
       const actor = await getActor();
-      return actor.updateMember(
-        data.memberId,
-        data.name,
-        data.phone,
-        data.address,
-        BigInt(data.monthlyFee),
+      return withRetry(() =>
+        actor.updateMember(
+          data.memberId,
+          data.name,
+          data.phone,
+          data.address,
+          BigInt(data.monthlyFee),
+        ),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["members"] }),
@@ -63,7 +68,7 @@ export function useDeleteMember() {
   return useMutation({
     mutationFn: async (memberId: bigint) => {
       const actor = await getActor();
-      return actor.deleteMember(memberId);
+      return withRetry(() => actor.deleteMember(memberId));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members"] });
@@ -79,7 +84,7 @@ export function useAllPayments() {
     queryKey: ["payments"],
     queryFn: async () => {
       const actor = await getActor();
-      return actor.getAllPayments();
+      return withRetry(() => actor.getAllPayments());
     },
   });
 }
@@ -89,7 +94,9 @@ export function usePaymentsByMonthYear(month: number, year: number) {
     queryKey: ["payments", month, year],
     queryFn: async () => {
       const actor = await getActor();
-      return actor.getPaymentsByMonthYear(BigInt(month), BigInt(year));
+      return withRetry(() =>
+        actor.getPaymentsByMonthYear(BigInt(month), BigInt(year)),
+      );
     },
   });
 }
@@ -106,13 +113,15 @@ export function useAddPayment() {
       paymentMode: string;
     }) => {
       const actor = await getActor();
-      return actor.addPayment(
-        data.memberId,
-        BigInt(data.month),
-        BigInt(data.year),
-        BigInt(data.amountPaid),
-        data.status,
-        data.paymentMode,
+      return withRetry(() =>
+        actor.addPayment(
+          data.memberId,
+          BigInt(data.month),
+          BigInt(data.year),
+          BigInt(data.amountPaid),
+          data.status,
+          data.paymentMode,
+        ),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
@@ -131,13 +140,15 @@ export function useUpdatePayment() {
       paymentMode: string;
     }) => {
       const actor = await getActor();
-      return actor.updatePayment(
-        data.paymentId,
-        BigInt(data.month),
-        BigInt(data.year),
-        BigInt(data.amountPaid),
-        data.status,
-        data.paymentMode,
+      return withRetry(() =>
+        actor.updatePayment(
+          data.paymentId,
+          BigInt(data.month),
+          BigInt(data.year),
+          BigInt(data.amountPaid),
+          data.status,
+          data.paymentMode,
+        ),
       );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
@@ -149,7 +160,7 @@ export function useDeletePayment() {
   return useMutation({
     mutationFn: async (paymentId: bigint) => {
       const actor = await getActor();
-      return actor.deletePayment(paymentId);
+      return withRetry(() => actor.deletePayment(paymentId));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
   });
@@ -162,7 +173,7 @@ export function useStats() {
     queryKey: ["stats"],
     queryFn: async () => {
       const actor = await getActor();
-      return actor.getStats();
+      return withRetry(() => actor.getStats());
     },
   });
 }
