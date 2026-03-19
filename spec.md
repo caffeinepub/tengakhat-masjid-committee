@@ -1,27 +1,25 @@
 # Tengakhat Masjid Committee
 
 ## Current State
-Admin and member login both use Internet Identity (II), which is broken/confusing for users. The backend uses Principal-based AccessControl. The frontend has a LoginPage with II-triggered buttons.
+App has admin login, member management, UPI payment with QR code, and payment history. No receipt generation exists.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Simple username + password login form for admins (no Internet Identity)
-- Default admin credentials: username=`admin`, password=`logmein`
-- Backend function `loginAdmin(username, password)` returning Bool
-- Backend function `changeAdminPassword(username, oldPassword, newPassword)` returning Bool
-- Frontend session management via localStorage (no II)
+- `ReceiptModal` component: displays a formatted digital receipt after payment or on demand
+- Receipt content: committee name, member name, member ID, address, amount paid, month/year, payment date, payment mode, receipt number
+- Print button: triggers browser print for the receipt
+- Download PDF button: generates and downloads a PDF receipt using browser APIs (no new dependencies)
+- View Receipt button in Full Payment History table rows
 
 ### Modify
-- Backend: Replace Principal/AccessControl-based auth with credential-based auth stored in canister state. All functions accept anonymous callers; admin actions are gated by a simple session check on the frontend.
-- Frontend LoginPage: Replace II button with username + password form for admin tab
-- Frontend App.tsx: Remove II hooks; use local session state for admin/member auth
+- `PaymentModal`: after successful payment submission, show the receipt modal automatically
+- `PaymentsPage`: add a "Receipt" button/icon in the Full Payment History table for each payment row
 
 ### Remove
-- Internet Identity dependency from login flow
-- AccessControl permission checks from backend functions
+- Nothing removed
 
 ## Implementation Plan
-1. Rewrite backend: store admin credentials map (username -> password), expose loginAdmin and changeAdminPassword; keep member/payment/UPI functions but remove AccessControl checks
-2. Rewrite frontend LoginPage: admin tab shows username+password form; member tab keeps serial+PIN flow
-3. Rewrite App.tsx: use localStorage session state instead of II hooks
+1. Create `src/frontend/src/components/ReceiptModal.tsx` with print and PDF download (using browser's print-to-PDF, no extra deps)
+2. Update `PaymentModal.tsx` to show receipt after successful submission
+3. Update `PaymentsPage.tsx` to add receipt button in payment history rows

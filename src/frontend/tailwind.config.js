@@ -10,13 +10,11 @@ export default {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
       fontFamily: {
-        poppins: ["Poppins", "sans-serif"],
+        poppins: ["Poppins", "system-ui", "sans-serif"],
       },
       colors: {
         border: "oklch(var(--border))",
@@ -70,31 +68,25 @@ export default {
           ring: "oklch(var(--sidebar-ring))",
         },
         navy: {
-          DEFAULT: "#0B2A5B",
-          dark: "#071D3F",
-          light: "#1E3A8A",
+          DEFAULT: "#1e3a8a",
+          dark: "#1e2d6b",
+          light: "#2563eb",
         },
         islamic: {
-          DEFAULT: "#0A6A3B",
-          light: "#0B8F4F",
-          dark: "#075430",
+          DEFAULT: "#00A859",
+          dark: "#007a41",
+          light: "#00c96b",
         },
         gold: {
           DEFAULT: "#D4AF37",
-          light: "#E5C048",
-          dark: "#B8971F",
+          light: "#e5c048",
+          dark: "#b8971f",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      boxShadow: {
-        xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
-        gold: "0 4px 20px rgba(212,175,55,0.3)",
-        green: "0 4px 20px rgba(10,106,59,0.3)",
-        glass: "0 8px 32px rgba(0,0,0,0.3)",
       },
       keyframes: {
         "accordion-down": {
@@ -106,19 +98,14 @@ export default {
           to: { height: "0" },
         },
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(10px)" },
+          from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "translateY(0)" },
-        },
-        shimmer: {
-          from: { backgroundPosition: "-200% 0" },
-          to: { backgroundPosition: "200% 0" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.4s ease-out",
-        shimmer: "shimmer 2s infinite linear",
+        "fade-in": "fade-in 0.3s ease-out",
       },
     },
   },

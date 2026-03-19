@@ -10,64 +10,58 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface Admin { 'username' : string, 'role' : string }
 export interface Member {
-  'pin' : string,
-  'username' : string,
-  'balance' : bigint,
+  'memberId' : bigint,
   'name' : string,
-  'serialNumber' : bigint,
+  'address' : string,
   'phone' : string,
-  'monthlyContribution' : bigint,
+  'monthlyFee' : bigint,
 }
-export interface PaymentRecord {
+export interface Payment {
+  'status' : string,
+  'memberId' : bigint,
   'month' : bigint,
-  'note' : string,
   'year' : bigint,
-  'timestamp' : bigint,
-  'amount' : bigint,
+  'amountPaid' : bigint,
+  'paymentId' : bigint,
+  'paymentDate' : bigint,
+  'paymentMode' : string,
 }
-export interface UpiSettings { 'upiId' : string }
-export interface UserProfile {
-  'userType' : string,
-  'adminInfo' : [] | [Admin],
-  'memberInfo' : [] | [Member],
-}
+export interface Stats { 'totalCollected' : bigint, 'totalMembers' : bigint }
+export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
-  'addAdmin' : ActorMethod<[Principal, string, string], undefined>,
-  'addMember' : ActorMethod<
-    [Principal, string, string, string, string, bigint, bigint],
-    undefined
-  >,
-  'addPaymentRecord' : ActorMethod<
-    [Principal, bigint, bigint, bigint, string],
-    undefined
+  'addMember' : ActorMethod<[string, string, string, bigint], bigint>,
+  'addPayment' : ActorMethod<
+    [bigint, bigint, bigint, bigint, string, string],
+    bigint
   >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
-  'deleteMember' : ActorMethod<[Principal], undefined>,
-  'getAdmin' : ActorMethod<[Principal], [] | [Admin]>,
+  'deleteMember' : ActorMethod<[bigint], boolean>,
+  'deletePayment' : ActorMethod<[bigint], boolean>,
+  'getAllMembers' : ActorMethod<[], Array<Member>>,
+  'getAllPayments' : ActorMethod<[], Array<Payment>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getMember' : ActorMethod<[], [] | [Member]>,
-  'getMemberByPrincipal' : ActorMethod<[Principal], [] | [Member]>,
-  'getPayments' : ActorMethod<[], Array<PaymentRecord>>,
-  'getPaymentsByMember' : ActorMethod<[Principal], Array<PaymentRecord>>,
-  'getUpiSettings' : ActorMethod<[], [] | [UpiSettings]>,
+  'getMember' : ActorMethod<[bigint], [] | [Member]>,
+  'getPayment' : ActorMethod<[bigint], [] | [Payment]>,
+  'getPaymentsByMember' : ActorMethod<[bigint], Array<Payment>>,
+  'getPaymentsByMonthYear' : ActorMethod<[bigint, bigint], Array<Payment>>,
+  'getStats' : ActorMethod<[], Stats>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'listAdmins' : ActorMethod<[], Array<[Principal, Admin]>>,
-  'listMembers' : ActorMethod<[], Array<[Principal, Member]>>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateMember' : ActorMethod<
-    [Principal, string, string, string, bigint, bigint],
-    undefined
+    [bigint, string, string, string, bigint],
+    boolean
   >,
-  'updatePin' : ActorMethod<[string], undefined>,
-  'updateUpiSettings' : ActorMethod<[string], undefined>,
+  'updatePayment' : ActorMethod<
+    [bigint, bigint, bigint, bigint, string, string],
+    boolean
+  >,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -1,174 +1,168 @@
-import type { Principal } from "@dfinity/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  Admin,
-  Member,
-  PaymentRecord,
-  UpiSettings,
-  UserProfile,
-} from "../backend.d.ts";
-import { useActor } from "./useActor";
+import { getActor } from "../actor";
+import type { Member, Payment } from "../backend";
 
-export type { Admin, Member, PaymentRecord, UpiSettings, UserProfile };
-
-function useActorEnabled() {
-  const { actor, isFetching } = useActor();
-  return { actor, enabled: !!actor && !isFetching };
-}
-
-export function useIsAdmin() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery({
-    queryKey: ["isAdmin"],
-    queryFn: () => actor!.isCallerAdmin(),
-    enabled,
-  });
-}
+// ── Members ──────────────────────────────────────────────────────────────────
 
 export function useMembers() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<Array<[Principal, Member]>>({
+  return useQuery<Member[]>({
     queryKey: ["members"],
-    queryFn: () => actor!.listMembers(),
-    enabled,
-  });
-}
-
-export function useGetMember() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<Member | null>({
-    queryKey: ["myMember"],
-    queryFn: () => actor!.getMember(),
-    enabled,
-  });
-}
-
-export function useUpiSettings() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<UpiSettings | null>({
-    queryKey: ["upiSettings"],
-    queryFn: () => actor!.getUpiSettings(),
-    enabled,
-  });
-}
-
-export function useCallerProfile() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<UserProfile | null>({
-    queryKey: ["callerProfile"],
-    queryFn: () => actor!.getCallerUserProfile(),
-    enabled,
-  });
-}
-
-export function useAdmins() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<Array<[Principal, Admin]>>({
-    queryKey: ["admins"],
-    queryFn: () => actor!.listAdmins(),
-    enabled,
-  });
-}
-
-export function usePaymentsByMember(memberPrincipal: Principal | null) {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<Array<PaymentRecord>>({
-    queryKey: ["payments", memberPrincipal?.toString()],
-    queryFn: () => actor!.getPaymentsByMember(memberPrincipal!),
-    enabled: enabled && memberPrincipal != null,
-  });
-}
-
-export function useMyPayments() {
-  const { actor, enabled } = useActorEnabled();
-  return useQuery<Array<PaymentRecord>>({
-    queryKey: ["myPayments"],
-    queryFn: () => actor!.getPayments(),
-    enabled,
+    queryFn: async () => {
+      const actor = await getActor();
+      return actor.getAllMembers();
+    },
   });
 }
 
 export function useAddMember() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      principal: Principal;
-      username: string;
-      pin: string;
+    mutationFn: async (data: {
       name: string;
       phone: string;
-      monthlyContribution: bigint;
-    }) =>
-      actor!.addMember(
-        data.principal,
-        data.username,
-        data.pin,
+      address: string;
+      monthlyFee: number;
+    }) => {
+      const actor = await getActor();
+      return actor.addMember(
         data.name,
         data.phone,
-        data.monthlyContribution,
-        BigInt(0),
-      ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+        data.address,
+        BigInt(data.monthlyFee),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["members"] }),
+  });
+}
+
+export function useUpdateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      memberId: bigint;
+      name: string;
+      phone: string;
+      address: string;
+      monthlyFee: number;
+    }) => {
+      const actor = await getActor();
+      return actor.updateMember(
+        data.memberId,
+        data.name,
+        data.phone,
+        data.address,
+        BigInt(data.monthlyFee),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["members"] }),
   });
 }
 
 export function useDeleteMember() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (principal: Principal) => actor!.deleteMember(principal),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    mutationFn: async (memberId: bigint) => {
+      const actor = await getActor();
+      return actor.deleteMember(memberId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["payments"] });
+    },
   });
 }
 
-export function useUpdateUpiSettings() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (upiId: string) => actor!.updateUpiSettings(upiId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["upiSettings"] }),
+// ── Payments ─────────────────────────────────────────────────────────────────
+
+export function useAllPayments() {
+  return useQuery<Payment[]>({
+    queryKey: ["payments"],
+    queryFn: async () => {
+      const actor = await getActor();
+      return actor.getAllPayments();
+    },
+  });
+}
+
+export function usePaymentsByMonthYear(month: number, year: number) {
+  return useQuery<Payment[]>({
+    queryKey: ["payments", month, year],
+    queryFn: async () => {
+      const actor = await getActor();
+      return actor.getPaymentsByMonthYear(BigInt(month), BigInt(year));
+    },
   });
 }
 
 export function useAddPayment() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      memberPrincipal: Principal;
-      amount: bigint;
-      month: bigint;
-      year: bigint;
-      note: string;
-    }) =>
-      actor!.addPaymentRecord(
-        data.memberPrincipal,
-        data.amount,
-        data.month,
-        data.year,
-        data.note,
-      ),
-    onSuccess: (_data, variables) =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["payments"] }),
-        queryClient.invalidateQueries({
-          queryKey: ["payments", variables.memberPrincipal.toString()],
-        }),
-      ]),
+    mutationFn: async (data: {
+      memberId: bigint;
+      month: number;
+      year: number;
+      amountPaid: number;
+      status: string;
+      paymentMode: string;
+    }) => {
+      const actor = await getActor();
+      return actor.addPayment(
+        data.memberId,
+        BigInt(data.month),
+        BigInt(data.year),
+        BigInt(data.amountPaid),
+        data.status,
+        data.paymentMode,
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
   });
 }
 
-export function useAddAdmin() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
+export function useUpdatePayment() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      principal: Principal;
-      username: string;
-      role: string;
-    }) => actor!.addAdmin(data.principal, data.username, data.role),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admins"] }),
+    mutationFn: async (data: {
+      paymentId: bigint;
+      month: number;
+      year: number;
+      amountPaid: number;
+      status: string;
+      paymentMode: string;
+    }) => {
+      const actor = await getActor();
+      return actor.updatePayment(
+        data.paymentId,
+        BigInt(data.month),
+        BigInt(data.year),
+        BigInt(data.amountPaid),
+        data.status,
+        data.paymentMode,
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
+  });
+}
+
+export function useDeletePayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (paymentId: bigint) => {
+      const actor = await getActor();
+      return actor.deletePayment(paymentId);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["payments"] }),
+  });
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+export function useStats() {
+  return useQuery({
+    queryKey: ["stats"],
+    queryFn: async () => {
+      const actor = await getActor();
+      return actor.getStats();
+    },
   });
 }

@@ -13,85 +13,74 @@ export const UserRole = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
-export const Admin = IDL.Record({ 'username' : IDL.Text, 'role' : IDL.Text });
 export const Member = IDL.Record({
-  'pin' : IDL.Text,
-  'username' : IDL.Text,
-  'balance' : IDL.Int,
+  'memberId' : IDL.Nat,
   'name' : IDL.Text,
-  'serialNumber' : IDL.Nat,
+  'address' : IDL.Text,
   'phone' : IDL.Text,
-  'monthlyContribution' : IDL.Nat,
+  'monthlyFee' : IDL.Nat,
 });
-export const UserProfile = IDL.Record({
-  'userType' : IDL.Text,
-  'adminInfo' : IDL.Opt(Admin),
-  'memberInfo' : IDL.Opt(Member),
-});
-export const PaymentRecord = IDL.Record({
+export const Payment = IDL.Record({
+  'status' : IDL.Text,
+  'memberId' : IDL.Nat,
   'month' : IDL.Nat,
-  'note' : IDL.Text,
   'year' : IDL.Nat,
-  'timestamp' : IDL.Int,
-  'amount' : IDL.Nat,
+  'amountPaid' : IDL.Nat,
+  'paymentId' : IDL.Nat,
+  'paymentDate' : IDL.Int,
+  'paymentMode' : IDL.Text,
 });
-export const UpiSettings = IDL.Record({ 'upiId' : IDL.Text });
+export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const Stats = IDL.Record({
+  'totalCollected' : IDL.Nat,
+  'totalMembers' : IDL.Nat,
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
-  'addAdmin' : IDL.Func([IDL.Principal, IDL.Text, IDL.Text], [], []),
   'addMember' : IDL.Func(
-      [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
-      [],
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+      [IDL.Nat],
       [],
     ),
-  'addPaymentRecord' : IDL.Func(
-      [IDL.Principal, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
-      [],
+  'addPayment' : IDL.Func(
+      [IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text, IDL.Text],
+      [IDL.Nat],
       [],
     ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-  'deleteMember' : IDL.Func([IDL.Principal], [], []),
-  'getAdmin' : IDL.Func([IDL.Principal], [IDL.Opt(Admin)], ['query']),
+  'deleteMember' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'deletePayment' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'getAllMembers' : IDL.Func([], [IDL.Vec(Member)], ['query']),
+  'getAllPayments' : IDL.Func([], [IDL.Vec(Payment)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getMember' : IDL.Func([], [IDL.Opt(Member)], ['query']),
-  'getMemberByPrincipal' : IDL.Func(
-      [IDL.Principal],
-      [IDL.Opt(Member)],
+  'getMember' : IDL.Func([IDL.Nat], [IDL.Opt(Member)], ['query']),
+  'getPayment' : IDL.Func([IDL.Nat], [IDL.Opt(Payment)], ['query']),
+  'getPaymentsByMember' : IDL.Func([IDL.Nat], [IDL.Vec(Payment)], ['query']),
+  'getPaymentsByMonthYear' : IDL.Func(
+      [IDL.Nat, IDL.Nat],
+      [IDL.Vec(Payment)],
       ['query'],
     ),
-  'getPayments' : IDL.Func([], [IDL.Vec(PaymentRecord)], ['query']),
-  'getPaymentsByMember' : IDL.Func(
-      [IDL.Principal],
-      [IDL.Vec(PaymentRecord)],
-      ['query'],
-    ),
-  'getUpiSettings' : IDL.Func([], [IDL.Opt(UpiSettings)], ['query']),
+  'getStats' : IDL.Func([], [Stats], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'listAdmins' : IDL.Func(
-      [],
-      [IDL.Vec(IDL.Tuple(IDL.Principal, Admin))],
-      ['query'],
-    ),
-  'listMembers' : IDL.Func(
-      [],
-      [IDL.Vec(IDL.Tuple(IDL.Principal, Member))],
-      ['query'],
-    ),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'updateMember' : IDL.Func(
-      [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
-      [],
+      [IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+      [IDL.Bool],
       [],
     ),
-  'updatePin' : IDL.Func([IDL.Text], [], []),
-  'updateUpiSettings' : IDL.Func([IDL.Text], [], []),
+  'updatePayment' : IDL.Func(
+      [IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text, IDL.Text],
+      [IDL.Bool],
+      [],
+    ),
 });
 
 export const idlInitArgs = [];
@@ -102,93 +91,74 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
-  const Admin = IDL.Record({ 'username' : IDL.Text, 'role' : IDL.Text });
   const Member = IDL.Record({
-    'pin' : IDL.Text,
-    'username' : IDL.Text,
-    'balance' : IDL.Int,
+    'memberId' : IDL.Nat,
     'name' : IDL.Text,
-    'serialNumber' : IDL.Nat,
+    'address' : IDL.Text,
     'phone' : IDL.Text,
-    'monthlyContribution' : IDL.Nat,
+    'monthlyFee' : IDL.Nat,
   });
-  const UserProfile = IDL.Record({
-    'userType' : IDL.Text,
-    'adminInfo' : IDL.Opt(Admin),
-    'memberInfo' : IDL.Opt(Member),
-  });
-  const PaymentRecord = IDL.Record({
+  const Payment = IDL.Record({
+    'status' : IDL.Text,
+    'memberId' : IDL.Nat,
     'month' : IDL.Nat,
-    'note' : IDL.Text,
     'year' : IDL.Nat,
-    'timestamp' : IDL.Int,
-    'amount' : IDL.Nat,
+    'amountPaid' : IDL.Nat,
+    'paymentId' : IDL.Nat,
+    'paymentDate' : IDL.Int,
+    'paymentMode' : IDL.Text,
   });
-  const UpiSettings = IDL.Record({ 'upiId' : IDL.Text });
+  const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const Stats = IDL.Record({
+    'totalCollected' : IDL.Nat,
+    'totalMembers' : IDL.Nat,
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
-    'addAdmin' : IDL.Func([IDL.Principal, IDL.Text, IDL.Text], [], []),
     'addMember' : IDL.Func(
-        [
-          IDL.Principal,
-          IDL.Text,
-          IDL.Text,
-          IDL.Text,
-          IDL.Text,
-          IDL.Nat,
-          IDL.Int,
-        ],
-        [],
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+        [IDL.Nat],
         [],
       ),
-    'addPaymentRecord' : IDL.Func(
-        [IDL.Principal, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text],
-        [],
+    'addPayment' : IDL.Func(
+        [IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text, IDL.Text],
+        [IDL.Nat],
         [],
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-    'deleteMember' : IDL.Func([IDL.Principal], [], []),
-    'getAdmin' : IDL.Func([IDL.Principal], [IDL.Opt(Admin)], ['query']),
+    'deleteMember' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'deletePayment' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'getAllMembers' : IDL.Func([], [IDL.Vec(Member)], ['query']),
+    'getAllPayments' : IDL.Func([], [IDL.Vec(Payment)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getMember' : IDL.Func([], [IDL.Opt(Member)], ['query']),
-    'getMemberByPrincipal' : IDL.Func(
-        [IDL.Principal],
-        [IDL.Opt(Member)],
+    'getMember' : IDL.Func([IDL.Nat], [IDL.Opt(Member)], ['query']),
+    'getPayment' : IDL.Func([IDL.Nat], [IDL.Opt(Payment)], ['query']),
+    'getPaymentsByMember' : IDL.Func([IDL.Nat], [IDL.Vec(Payment)], ['query']),
+    'getPaymentsByMonthYear' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Vec(Payment)],
         ['query'],
       ),
-    'getPayments' : IDL.Func([], [IDL.Vec(PaymentRecord)], ['query']),
-    'getPaymentsByMember' : IDL.Func(
-        [IDL.Principal],
-        [IDL.Vec(PaymentRecord)],
-        ['query'],
-      ),
-    'getUpiSettings' : IDL.Func([], [IDL.Opt(UpiSettings)], ['query']),
+    'getStats' : IDL.Func([], [Stats], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'listAdmins' : IDL.Func(
-        [],
-        [IDL.Vec(IDL.Tuple(IDL.Principal, Admin))],
-        ['query'],
-      ),
-    'listMembers' : IDL.Func(
-        [],
-        [IDL.Vec(IDL.Tuple(IDL.Principal, Member))],
-        ['query'],
-      ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'updateMember' : IDL.Func(
-        [IDL.Principal, IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Int],
-        [],
+        [IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+        [IDL.Bool],
         [],
       ),
-    'updatePin' : IDL.Func([IDL.Text], [], []),
-    'updateUpiSettings' : IDL.Func([IDL.Text], [], []),
+    'updatePayment' : IDL.Func(
+        [IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Text, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
   });
 };
 

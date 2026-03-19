@@ -7,33 +7,29 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export interface PaymentRecord {
-    month: bigint;
-    note: string;
-    year: bigint;
-    timestamp: bigint;
-    amount: bigint;
+export interface Stats {
+    totalCollected: bigint;
+    totalMembers: bigint;
 }
 export interface Member {
-    pin: string;
-    username: string;
-    balance: bigint;
+    memberId: bigint;
     name: string;
-    serialNumber: bigint;
+    address: string;
     phone: string;
-    monthlyContribution: bigint;
+    monthlyFee: bigint;
 }
-export interface Admin {
-    username: string;
-    role: string;
+export interface Payment {
+    status: string;
+    memberId: bigint;
+    month: bigint;
+    year: bigint;
+    amountPaid: bigint;
+    paymentId: bigint;
+    paymentDate: bigint;
+    paymentMode: string;
 }
 export interface UserProfile {
-    userType: string;
-    adminInfo?: Admin;
-    memberInfo?: Member;
-}
-export interface UpiSettings {
-    upiId: string;
+    name: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -41,25 +37,23 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    addAdmin(principal: Principal, username: string, role: string): Promise<void>;
-    addMember(memberPrincipal: Principal, username: string, pin: string, name: string, phone: string, monthlyContribution: bigint, balance: bigint): Promise<void>;
-    addPaymentRecord(memberPrincipal: Principal, amount: bigint, month: bigint, year: bigint, note: string): Promise<void>;
+    addMember(name: string, phone: string, address: string, monthlyFee: bigint): Promise<bigint>;
+    addPayment(memberId: bigint, month: bigint, year: bigint, amountPaid: bigint, status: string, paymentMode: string): Promise<bigint>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    deleteMember(memberPrincipal: Principal): Promise<void>;
-    getAdmin(principal: Principal): Promise<Admin | null>;
+    deleteMember(memberId: bigint): Promise<boolean>;
+    deletePayment(paymentId: bigint): Promise<boolean>;
+    getAllMembers(): Promise<Array<Member>>;
+    getAllPayments(): Promise<Array<Payment>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getMember(): Promise<Member | null>;
-    getMemberByPrincipal(memberPrincipal: Principal): Promise<Member | null>;
-    getPayments(): Promise<Array<PaymentRecord>>;
-    getPaymentsByMember(memberPrincipal: Principal): Promise<Array<PaymentRecord>>;
-    getUpiSettings(): Promise<UpiSettings | null>;
+    getMember(memberId: bigint): Promise<Member | null>;
+    getPayment(paymentId: bigint): Promise<Payment | null>;
+    getPaymentsByMember(memberId: bigint): Promise<Array<Payment>>;
+    getPaymentsByMonthYear(month: bigint, year: bigint): Promise<Array<Payment>>;
+    getStats(): Promise<Stats>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
-    listAdmins(): Promise<Array<[Principal, Admin]>>;
-    listMembers(): Promise<Array<[Principal, Member]>>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    updateMember(memberPrincipal: Principal, username: string, name: string, phone: string, monthlyContribution: bigint, balance: bigint): Promise<void>;
-    updatePin(newPin: string): Promise<void>;
-    updateUpiSettings(upiId: string): Promise<void>;
+    updateMember(memberId: bigint, name: string, phone: string, address: string, monthlyFee: bigint): Promise<boolean>;
+    updatePayment(paymentId: bigint, month: bigint, year: bigint, amountPaid: bigint, status: string, paymentMode: string): Promise<boolean>;
 }

@@ -4,217 +4,151 @@ import Text "mo:core/Text";
 import Int "mo:core/Int";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
-import Iter "mo:core/Iter";
 import Time "mo:core/Time";
 
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
-
 actor {
-  // Keep accessControlState stable to preserve backward compatibility
+  // Preserved from previous version to satisfy upgrade compatibility.
+  // These are no longer used for access control since auth is frontend-only.
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
+  public type UserProfile = { name : Text };
+  let userProfiles = Map.empty<Principal, UserProfile>();
+
   // Member Type
   type Member = {
-    serialNumber : Nat;
-    username : Text;
-    pin : Text;
+    memberId : Nat;
     name : Text;
     phone : Text;
-    monthlyContribution : Nat;
-    balance : Int;
+    address : Text;
+    monthlyFee : Nat;
   };
 
-  // Admin Type
-  type Admin = {
-    username : Text;
-    role : Text; // "superadmin" or "admin"
-  };
-
-  // Payment Record Type
-  type PaymentRecord = {
-    amount : Nat;
+  // Payment Type
+  type Payment = {
+    paymentId : Nat;
+    memberId : Nat;
     month : Nat;
     year : Nat;
-    note : Text;
-    timestamp : Int;
+    amountPaid : Nat;
+    status : Text;
+    paymentDate : Int;
+    paymentMode : Text;
   };
 
-  // UPI Settings Type
-  type UpiSettings = {
-    upiId : Text;
+  type Stats = {
+    totalMembers : Nat;
+    totalCollected : Nat;
   };
 
-  // User Profile Type (required by frontend)
-  public type UserProfile = {
-    userType : Text; // "admin" or "member"
-    adminInfo : ?Admin;
-    memberInfo : ?Member;
+  let members = Map.empty<Nat, Member>();
+  let payments = Map.empty<Nat, Payment>();
+  var memberCounter = 0;
+  var paymentCounter = 0;
+
+  // Member CRUD — no access control checks (auth is handled by the frontend)
+
+  public shared func addMember(name : Text, phone : Text, address : Text, monthlyFee : Nat) : async Nat {
+    let memberId = memberCounter + 1;
+    let member : Member = { memberId; name; phone; address; monthlyFee };
+    members.add(memberId, member);
+    memberCounter += 1;
+    memberId;
   };
 
-  let members = Map.empty<Principal, Member>();
-  let admins = Map.empty<Principal, Admin>();
-  let payments = Map.empty<Principal, [PaymentRecord]>();
-  var upiSettings : ?UpiSettings = null;
-
-  // Required profile management functions
-
-  public query func getCallerUserProfile() : async ?UserProfile {
-    null;
+  public query func getMember(memberId : Nat) : async ?Member {
+    members.get(memberId);
   };
 
-  public query func getUserProfile(_ : Principal) : async ?UserProfile {
-    null;
+  public query func getAllMembers() : async [Member] {
+    members.values().toArray();
   };
 
-  public shared func saveCallerUserProfile(_ : UserProfile) : async () {
-    Runtime.trap("Use specific member/admin management functions");
-  };
-
-  // Admin Management
-
-  public shared func addAdmin(principal : Principal, username : Text, role : Text) : async () {
-    if (role != "admin" and role != "superadmin") {
-      Runtime.trap("Invalid role: must be 'admin' or 'superadmin'");
-    };
-    let admin = { username; role };
-    admins.add(principal, admin);
-  };
-
-  public query func getAdmin(principal : Principal) : async ?Admin {
-    admins.get(principal);
-  };
-
-  public query func listAdmins() : async [(Principal, Admin)] {
-    admins.entries().toArray();
-  };
-
-  // Member Management
-
-  public shared func addMember(
-    memberPrincipal : Principal,
-    username : Text,
-    pin : Text,
-    name : Text,
-    phone : Text,
-    monthlyContribution : Nat,
-    balance : Int,
-  ) : async () {
-    let member = {
-      serialNumber = members.size() + 1;
-      username;
-      pin;
-      name;
-      phone;
-      monthlyContribution;
-      balance;
-    };
-    members.add(memberPrincipal, member);
-  };
-
-  public shared func updateMember(
-    memberPrincipal : Principal,
-    username : Text,
-    name : Text,
-    phone : Text,
-    monthlyContribution : Nat,
-    balance : Int,
-  ) : async () {
-    switch (members.get(memberPrincipal)) {
-      case (?existingMember) {
-        let updatedMember = {
-          serialNumber = existingMember.serialNumber;
-          username;
-          pin = existingMember.pin;
-          name;
-          phone;
-          monthlyContribution;
-          balance;
-        };
-        members.add(memberPrincipal, updatedMember);
-      };
-      case (null) {
-        Runtime.trap("Member not found");
-      };
-    };
-  };
-
-  public shared func deleteMember(memberPrincipal : Principal) : async () {
-    members.remove(memberPrincipal);
-    payments.remove(memberPrincipal);
-  };
-
-  public query func getMember() : async ?Member {
-    null;
-  };
-
-  public query func getMemberByPrincipal(memberPrincipal : Principal) : async ?Member {
-    members.get(memberPrincipal);
-  };
-
-  public query func listMembers() : async [(Principal, Member)] {
-    members.entries().toArray();
-  };
-
-  public shared func updatePin(_ : Text) : async () {
-    // PIN updates handled via updateMember
-  };
-
-  // UPI Settings Management
-
-  public shared func updateUpiSettings(upiId : Text) : async () {
-    upiSettings := ?{ upiId };
-  };
-
-  public query func getUpiSettings() : async ?UpiSettings {
-    upiSettings;
-  };
-
-  // Payment Records Management
-
-  public shared func addPaymentRecord(
-    memberPrincipal : Principal,
-    amount : Nat,
-    month : Nat,
-    year : Nat,
-    note : Text,
-  ) : async () {
-    switch (members.get(memberPrincipal)) {
-      case (null) {
-        Runtime.trap("Member not found");
-      };
+  public shared func updateMember(memberId : Nat, name : Text, phone : Text, address : Text, monthlyFee : Nat) : async Bool {
+    switch (members.get(memberId)) {
+      case (null) { Runtime.trap("Member not found"); };
       case (?_) {};
     };
+    members.add(memberId, { memberId; name; phone; address; monthlyFee });
+    true;
+  };
 
-    let paymentRecord = {
-      amount;
-      month;
-      year;
-      note;
-      timestamp = Time.now();
+  public shared func deleteMember(memberId : Nat) : async Bool {
+    switch (members.get(memberId)) {
+      case (null) { Runtime.trap("Member not found"); };
+      case (?_) {};
     };
+    members.remove(memberId);
+    true;
+  };
 
-    switch (payments.get(memberPrincipal)) {
-      case (?existingPayments) {
-        let newPayments = existingPayments.concat([paymentRecord]);
-        payments.add(memberPrincipal, newPayments);
-      };
-      case (null) {
-        payments.add(memberPrincipal, [paymentRecord]);
+  // Payment CRUD
+
+  public shared func addPayment(memberId : Nat, month : Nat, year : Nat, amountPaid : Nat, status : Text, paymentMode : Text) : async Nat {
+    switch (members.get(memberId)) {
+      case (null) { Runtime.trap("Member not found"); };
+      case (?_) {};
+    };
+    let paymentId = paymentCounter + 1;
+    let payment : Payment = {
+      paymentId; memberId; month; year; amountPaid; status;
+      paymentDate = Time.now(); paymentMode;
+    };
+    payments.add(paymentId, payment);
+    paymentCounter += 1;
+    paymentId;
+  };
+
+  public query func getPayment(paymentId : Nat) : async ?Payment {
+    payments.get(paymentId);
+  };
+
+  public query func getAllPayments() : async [Payment] {
+    payments.values().toArray();
+  };
+
+  public shared func updatePayment(paymentId : Nat, month : Nat, year : Nat, amountPaid : Nat, status : Text, paymentMode : Text) : async Bool {
+    switch (payments.get(paymentId)) {
+      case (null) { Runtime.trap("Payment not found"); };
+      case (?payment) {
+        switch (members.get(payment.memberId)) {
+          case (null) { Runtime.trap("Member not found for this payment"); };
+          case (?_) {};
+        };
+        payments.add(paymentId, {
+          paymentId; memberId = payment.memberId; month; year;
+          amountPaid; status; paymentDate = Time.now(); paymentMode;
+        });
+        true;
       };
     };
   };
 
-  public query func getPayments() : async [PaymentRecord] {
-    [];
+  public shared func deletePayment(paymentId : Nat) : async Bool {
+    switch (payments.get(paymentId)) {
+      case (null) { Runtime.trap("Payment not found"); };
+      case (?_) {};
+    };
+    payments.remove(paymentId);
+    true;
   };
 
-  public query func getPaymentsByMember(memberPrincipal : Principal) : async [PaymentRecord] {
-    switch (payments.get(memberPrincipal)) {
-      case (?records) { records };
-      case (null) { [] };
+  public query func getPaymentsByMember(memberId : Nat) : async [Payment] {
+    payments.values().toArray().filter(func(p) { p.memberId == memberId });
+  };
+
+  public query func getPaymentsByMonthYear(month : Nat, year : Nat) : async [Payment] {
+    payments.values().toArray().filter(func(p) { p.month == month and p.year == year });
+  };
+
+  public query func getStats() : async Stats {
+    var totalCollected = 0;
+    for (payment in payments.values().toArray().values()) {
+      totalCollected += payment.amountPaid;
     };
+    { totalMembers = members.size(); totalCollected };
   };
 };
