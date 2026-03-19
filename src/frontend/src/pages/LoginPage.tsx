@@ -56,13 +56,16 @@ export default function LoginPage({ onLogin }: Props) {
           }}
         >
           <CardHeader className="text-center pb-2 pt-8">
-            {/* Logo — bigger */}
+            {/* Logo — larger with visible text */}
             <div className="flex justify-center mb-4">
               <img
-                src="/assets/generated/tmc-logo-transparent.dim_600x200.png"
+                src="/assets/generated/tmc-logo-transparent.dim_700x220.png"
                 alt="Tengakhat Masjid Committee"
-                className="h-28 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.2))" }}
+                className="h-36 w-auto object-contain"
+                style={{
+                  filter:
+                    "drop-shadow(0 2px 8px rgba(0,0,0,0.25)) brightness(0.95) saturate(1.2)",
+                }}
               />
             </div>
             <p className="text-sm font-semibold" style={{ color: "#004d26" }}>

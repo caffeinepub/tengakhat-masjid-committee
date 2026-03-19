@@ -54,16 +54,16 @@ export default function AppLayout({ onLogout }: Props) {
       {/* Header */}
       <header className="app-header text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            {/* Logo — bigger */}
+          <div className="flex items-center justify-between h-24">
+            {/* Logo — larger */}
             <div className="flex items-center gap-3">
               <img
-                src="/assets/generated/tmc-logo-transparent.dim_600x200.png"
+                src="/assets/generated/tmc-logo-transparent.dim_700x220.png"
                 alt="Tengakhat Masjid Committee"
-                className="h-16 w-auto object-contain"
+                className="h-20 w-auto object-contain"
                 style={{
                   filter:
-                    "drop-shadow(0 1px 4px rgba(0,0,0,0.5)) brightness(1.1)",
+                    "drop-shadow(0 1px 6px rgba(0,0,0,0.6)) brightness(1.15)",
                 }}
               />
             </div>
