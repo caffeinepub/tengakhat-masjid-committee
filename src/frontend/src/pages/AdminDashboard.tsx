@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  FileText,
   History,
   KeyRound,
   Loader2,
@@ -60,6 +61,7 @@ import {
   useUpiSettings,
 } from "../hooks/useQueries";
 import type { Member } from "../hooks/useQueries";
+import ReportsTab from "./ReportsTab";
 
 const MONTHS = [
   "January",
@@ -891,6 +893,14 @@ export default function AdminDashboard({ onLogout }: Props) {
               Payments
             </TabsTrigger>
             <TabsTrigger
+              value="reports"
+              className="data-[state=active]:bg-primary data-[state=active]:text-white gap-2"
+              data-ocid="admin.reports_tab"
+            >
+              <FileText size={15} />
+              Reports
+            </TabsTrigger>
+            <TabsTrigger
               value="admins"
               className="data-[state=active]:bg-primary data-[state=active]:text-white gap-2"
               data-ocid="admin.admins_tab"
@@ -1031,6 +1041,11 @@ export default function AdminDashboard({ onLogout }: Props) {
           {/* Payments Tab */}
           <TabsContent value="payments">
             <PaymentsTab />
+          </TabsContent>
+
+          {/* Reports Tab */}
+          <TabsContent value="reports">
+            <ReportsTab />
           </TabsContent>
 
           {/* Manage Admins Tab */}
