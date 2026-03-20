@@ -1,25 +1,31 @@
 # Tengakhat Masjid Committee
 
 ## Current State
-App has admin login, member management, UPI payment with QR code, and payment history. No receipt generation exists.
+The ReportsTab component exists but is a stub that renders null. The PDF/Excel libraries (jspdf, jspdf-autotable, xlsx) are missing from package.json. All other features (member management, UPI payments, receipts, member portal, auto-retry, admin PIN reset) are working.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `ReceiptModal` component: displays a formatted digital receipt after payment or on demand
-- Receipt content: committee name, member name, member ID, address, amount paid, month/year, payment date, payment mode, receipt number
-- Print button: triggers browser print for the receipt
-- Download PDF button: generates and downloads a PDF receipt using browser APIs (no new dependencies)
-- View Receipt button in Full Payment History table rows
+- `jspdf`, `jspdf-autotable`, `xlsx` to package.json dependencies
+- Full ReportsTab UI with three report types:
+  1. **Member List** -- all members with ID, name, phone, address, monthly fee
+  2. **Payment History** -- all payments with member name, month/year, amount, status, mode
+  3. **Monthly Summary** -- for a selected month/year, each member and their payment status
+- Export buttons for PDF and Excel for each report type
+- Year/month selector for Monthly Summary
 
 ### Modify
-- `PaymentModal`: after successful payment submission, show the receipt modal automatically
-- `PaymentsPage`: add a "Receipt" button/icon in the Full Payment History table for each payment row
+- `src/frontend/src/pages/ReportsTab.tsx` -- replace stub with full implementation
+- `src/frontend/package.json` -- add jspdf, jspdf-autotable, xlsx
 
 ### Remove
-- Nothing removed
+- Nothing
 
 ## Implementation Plan
-1. Create `src/frontend/src/components/ReceiptModal.tsx` with print and PDF download (using browser's print-to-PDF, no extra deps)
-2. Update `PaymentModal.tsx` to show receipt after successful submission
-3. Update `PaymentsPage.tsx` to add receipt button in payment history rows
+1. Add jspdf, jspdf-autotable, xlsx to package.json
+2. Implement ReportsTab with three tabs: Member List, Payment History, Monthly Summary
+3. Each tab has preview table + PDF export + Excel export buttons
+4. Data fetched from existing useMembers and useAllPayments hooks
+5. PDF generated with jspdf + jspdf-autotable
+6. Excel generated with xlsx (SheetJS)
+7. Validate and deploy

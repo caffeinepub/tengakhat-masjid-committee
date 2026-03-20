@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   CreditCard,
+  KeyRound,
   Loader2,
   Pencil,
   Plus,
@@ -61,6 +62,7 @@ export default function MembersPage() {
   const [form, setForm] = useState<MemberForm>(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<Member | null>(null);
+  const [pinResetTarget, setPinResetTarget] = useState<Member | null>(null);
   const [formError, setFormError] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +187,17 @@ export default function MembersPage() {
       const msg = err instanceof Error ? err.message : "Unknown error";
       toast.error(`Failed to delete member: ${msg}`);
     }
+  }
+
+  function handlePinReset() {
+    if (!pinResetTarget) return;
+    const pins: Record<string, string> = JSON.parse(
+      localStorage.getItem("tmc_member_pins") ?? "{}",
+    );
+    pins[String(pinResetTarget.memberId)] = "1234";
+    localStorage.setItem("tmc_member_pins", JSON.stringify(pins));
+    toast.success(`PIN reset to 1234 for ${pinResetTarget.name}`);
+    setPinResetTarget(null);
   }
 
   const isSaving = addMember.isPending || updateMember.isPending;
@@ -345,6 +358,16 @@ export default function MembersPage() {
                         >
                           <CreditCard className="w-4 h-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          data-ocid={`members.item.${idx + 1}.button`}
+                          onClick={() => setPinResetTarget(member)}
+                          className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                          title="Reset PIN"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -423,6 +446,15 @@ export default function MembersPage() {
                       className="h-8 w-8 text-primary"
                     >
                       <CreditCard className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setPinResetTarget(member)}
+                      className="h-8 w-8 text-amber-600"
+                      title="Reset PIN"
+                    >
+                      <KeyRound className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -606,6 +638,34 @@ export default function MembersPage() {
               ) : (
                 "Delete"
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* PIN Reset Confirmation */}
+      <AlertDialog
+        open={!!pinResetTarget}
+        onOpenChange={(open) => !open && setPinResetTarget(null)}
+      >
+        <AlertDialogContent data-ocid="members.pin-reset.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Member PIN</AlertDialogTitle>
+            <AlertDialogDescription>
+              Reset PIN for <strong>{pinResetTarget?.name}</strong>? Their PIN
+              will be reset to <strong>1234</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="members.pin-reset.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-ocid="members.pin-reset.confirm_button"
+              onClick={handlePinReset}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Reset PIN
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
