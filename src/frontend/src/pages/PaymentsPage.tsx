@@ -44,7 +44,10 @@ const MONTHS = [
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
-const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+const YEARS = Array.from(
+  { length: currentYear - 2020 + 21 },
+  (_, i) => 2020 + i,
+);
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "Paid")

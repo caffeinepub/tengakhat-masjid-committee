@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, LogOut, User } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle, KeyRound, LogOut, User } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -40,13 +41,35 @@ const TAB_LIST: { id: MemberTab; label: string }[] = [
   { id: "pin", label: "Change PIN" },
 ];
 
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col items-center mb-6">
+        <Skeleton className="w-24 h-24 rounded-full" />
+        <Skeleton className="mt-2 h-3 w-32" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-16 rounded-lg" />
+        <Skeleton className="h-16 rounded-lg" />
+      </div>
+      <Skeleton className="h-14 rounded-lg" />
+      <Skeleton className="h-14 rounded-lg" />
+      <Skeleton className="h-14 rounded-lg" />
+    </div>
+  );
+}
+
 export default function MemberPortal({ memberId, onLogout }: Props) {
   const [activeTab, setActiveTab] = useState<MemberTab>("profile");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinError, setPinError] = useState("");
 
-  const { data: allMembers } = useMembers();
+  const {
+    data: allMembers,
+    isLoading: membersLoading,
+    isError: membersError,
+  } = useMembers();
   const { data: allPayments } = useAllPayments();
 
   const member = allMembers?.find((m) => String(m.memberId) === memberId);
@@ -83,6 +106,163 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
 
   const currentYear = new Date().getFullYear();
 
+  function renderProfileContent() {
+    if (membersLoading) {
+      return <ProfileSkeleton />;
+    }
+    if (membersError) {
+      return (
+        <div
+          className="flex flex-col items-center gap-3 py-10 px-4 rounded-lg text-center"
+          style={{ background: "#fff5f5" }}
+          data-ocid="profile.error_state"
+        >
+          <AlertCircle className="w-8 h-8 text-red-500" />
+          <p className="text-sm font-medium text-red-700">
+            Could not load profile data. Please check your connection or try
+            again.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
+        </div>
+      );
+    }
+    if (!member) {
+      return (
+        <div
+          className="flex flex-col items-center gap-3 py-10 px-4 rounded-lg text-center"
+          style={{ background: "#fffbeb" }}
+          data-ocid="profile.empty_state"
+        >
+          <User className="w-8 h-8" style={{ color: "#92400e" }} />
+          <p className="text-sm font-medium" style={{ color: "#92400e" }}>
+            Profile not found. Please contact your admin to verify your Member
+            ID.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col items-center mb-6">
+          <div
+            className="w-24 h-24 rounded-full overflow-hidden border-4 flex items-center justify-center"
+            style={{ borderColor: "#D4AF37" }}
+          >
+            {photo ? (
+              <img
+                src={photo}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center"
+                style={{ background: "#e8f5ee" }}
+              >
+                <User className="w-12 h-12" style={{ color: "#006633" }} />
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Photo managed by admin
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 rounded-lg" style={{ background: "#f0f9f4" }}>
+            <p className="text-xs text-muted-foreground">Member ID</p>
+            <p className="font-bold" style={{ color: "#004d26" }}>
+              #{String(member.memberId)}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg" style={{ background: "#f0f9f4" }}>
+            <p className="text-xs text-muted-foreground">Monthly Fee</p>
+            <p className="font-bold" style={{ color: "#004d26" }}>
+              ₹{Number(member.monthlyFee).toLocaleString()}
+            </p>
+          </div>
+        </div>
+        <div className="p-3 rounded-lg" style={{ background: "#f0f9f4" }}>
+          <p className="text-xs text-muted-foreground">Full Name</p>
+          <p className="font-semibold">{member.name}</p>
+        </div>
+        <div className="p-3 rounded-lg" style={{ background: "#f0f9f4" }}>
+          <p className="text-xs text-muted-foreground">Phone</p>
+          <p className="font-semibold">{member.phone}</p>
+        </div>
+        {member.address && (
+          <div className="p-3 rounded-lg" style={{ background: "#f0f9f4" }}>
+            <p className="text-xs text-muted-foreground">Address</p>
+            <p className="font-semibold">{member.address}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderPayContent() {
+    if (membersLoading) {
+      return (
+        <div className="space-y-3" data-ocid="pay.loading_state">
+          <Skeleton className="h-12 rounded-lg" />
+          <Skeleton className="h-48 rounded-lg" />
+        </div>
+      );
+    }
+    if (membersError) {
+      return (
+        <div
+          className="flex flex-col items-center gap-3 py-10 px-4 rounded-lg text-center"
+          style={{ background: "#fff5f5" }}
+          data-ocid="pay.error_state"
+        >
+          <AlertCircle className="w-8 h-8 text-red-500" />
+          <p className="text-sm font-medium text-red-700">
+            Could not load member data. Please check your connection or try
+            again.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
+        </div>
+      );
+    }
+    if (!member) {
+      return (
+        <p
+          className="text-center text-muted-foreground py-8"
+          data-ocid="pay.empty_state"
+        >
+          Member data not found. Please contact admin.
+        </p>
+      );
+    }
+    return (
+      <div>
+        <p className="text-sm text-muted-foreground mb-3">
+          Scan the QR code or tap a button below to pay your monthly fee of{" "}
+          <span className="font-semibold text-foreground">
+            ₹{Number(member.monthlyFee).toLocaleString()}
+          </span>
+          . After payment, inform the admin to mark it as paid.
+        </p>
+        <UpiPaymentPanel
+          amount={Number(member.monthlyFee)}
+          memberName={member.name}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -103,6 +283,7 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
                 size="sm"
                 onClick={onLogout}
                 className="text-white hover:text-white hover:bg-white/10"
+                data-ocid="member.logout_button"
               >
                 <LogOut className="w-4 h-4 mr-1" />
                 Logout
@@ -126,6 +307,7 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
               type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              data-ocid={`member.${tab.id}.tab`}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
                   ? "bg-white/20 text-white font-semibold"
@@ -157,89 +339,8 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
               <CardHeader>
                 <CardTitle className="text-lg font-bold">My Profile</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center mb-6">
-                  <div
-                    className="w-24 h-24 rounded-full overflow-hidden border-4 flex items-center justify-center"
-                    style={{ borderColor: "#D4AF37" }}
-                  >
-                    {photo ? (
-                      <img
-                        src={photo}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="w-full h-full flex items-center justify-center"
-                        style={{ background: "#e8f5ee" }}
-                      >
-                        <User
-                          className="w-12 h-12"
-                          style={{ color: "#006633" }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Photo managed by admin
-                  </p>
-                </div>
-                {member ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div
-                        className="p-3 rounded-lg"
-                        style={{ background: "#f0f9f4" }}
-                      >
-                        <p className="text-xs text-muted-foreground">
-                          Member ID
-                        </p>
-                        <p className="font-bold" style={{ color: "#004d26" }}>
-                          #{String(member.memberId)}
-                        </p>
-                      </div>
-                      <div
-                        className="p-3 rounded-lg"
-                        style={{ background: "#f0f9f4" }}
-                      >
-                        <p className="text-xs text-muted-foreground">
-                          Monthly Fee
-                        </p>
-                        <p className="font-bold" style={{ color: "#004d26" }}>
-                          ₹{Number(member.monthlyFee).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      className="p-3 rounded-lg"
-                      style={{ background: "#f0f9f4" }}
-                    >
-                      <p className="text-xs text-muted-foreground">Full Name</p>
-                      <p className="font-semibold">{member.name}</p>
-                    </div>
-                    <div
-                      className="p-3 rounded-lg"
-                      style={{ background: "#f0f9f4" }}
-                    >
-                      <p className="text-xs text-muted-foreground">Phone</p>
-                      <p className="font-semibold">{member.phone}</p>
-                    </div>
-                    {member.address && (
-                      <div
-                        className="p-3 rounded-lg"
-                        style={{ background: "#f0f9f4" }}
-                      >
-                        <p className="text-xs text-muted-foreground">Address</p>
-                        <p className="font-semibold">{member.address}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">
-                    Member data not found. Please contact admin.
-                  </p>
-                )}
+              <CardContent data-ocid="profile.card">
+                {renderProfileContent()}
               </CardContent>
             </Card>
           )}
@@ -259,21 +360,25 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
               </CardHeader>
               <CardContent>
                 {myPayments.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
+                  <div
+                    className="text-center py-10 text-muted-foreground"
+                    data-ocid="history.empty_state"
+                  >
                     <p className="text-3xl mb-2">💳</p>
                     <p>No payments recorded yet.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3" data-ocid="history.list">
                     {[...myPayments]
                       .sort(
                         (a, b) => Number(b.paymentDate) - Number(a.paymentDate),
                       )
-                      .map((p) => (
+                      .map((p, idx) => (
                         <div
                           key={String(p.paymentId)}
                           className="flex items-center justify-between p-3 rounded-lg border"
                           style={{ borderColor: "rgba(212,175,55,0.3)" }}
+                          data-ocid={`history.item.${idx + 1}`}
                         >
                           <div>
                             <p className="font-semibold text-sm">
@@ -376,27 +481,8 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
                   Make a UPI Payment
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                {member ? (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Scan the QR code or tap a button below to pay your monthly
-                      fee of{" "}
-                      <span className="font-semibold text-foreground">
-                        ₹{Number(member.monthlyFee).toLocaleString()}
-                      </span>
-                      . After payment, inform the admin to mark it as paid.
-                    </p>
-                    <UpiPaymentPanel
-                      amount={Number(member.monthlyFee)}
-                      memberName={member.name}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">
-                    Member data not found. Please contact admin.
-                  </p>
-                )}
+              <CardContent data-ocid="pay.card">
+                {renderPayContent()}
               </CardContent>
             </Card>
           )}
@@ -424,6 +510,7 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
                       onChange={(e) => setNewPin(e.target.value)}
                       maxLength={6}
                       required
+                      data-ocid="pin.input"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -436,10 +523,14 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
                       onChange={(e) => setConfirmPin(e.target.value)}
                       maxLength={6}
                       required
+                      data-ocid="pin.confirm_input"
                     />
                   </div>
                   {pinError && (
-                    <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                    <p
+                      className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2"
+                      data-ocid="pin.error_state"
+                    >
                       {pinError}
                     </p>
                   )}
@@ -450,6 +541,7 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
                       background:
                         "linear-gradient(135deg, #006633 0%, #00A859 100%)",
                     }}
+                    data-ocid="pin.submit_button"
                   >
                     <KeyRound className="w-4 h-4 mr-2" />
                     Update PIN

@@ -28,7 +28,11 @@ const MONTHS = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - 2 + i);
+// From 2020 up to 20 years in the future — auto-expands every year
+const YEARS = Array.from(
+  { length: CURRENT_YEAR - 2020 + 21 },
+  (_, i) => 2020 + i,
+);
 
 type ReportType = "members" | "payments" | "summary";
 
@@ -37,6 +41,32 @@ function statusBadgeClass(status: string) {
   if (status === "Partial")
     return "bg-yellow-100 text-yellow-800 border-yellow-300";
   return "bg-red-100 text-red-800 border-red-300";
+}
+
+// Helper: download a string as a file
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Helper: escape CSV cell
+function csvCell(value: string | number): string {
+  const s = String(value);
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function rowToCsv(cells: (string | number)[]): string {
+  return cells.map(csvCell).join(",");
 }
 
 export default function ReportsTab() {
@@ -69,137 +99,97 @@ export default function ReportsTab() {
       monthlyFee: Number(m.monthlyFee),
       amountPaid: payment ? Number(payment.amountPaid) : 0,
       status: payment ? payment.status : "Unpaid",
-      paymentMode: payment ? payment.paymentMode : "—",
+      paymentMode: payment ? payment.paymentMode : "\u2014",
     };
   });
 
-  // ── PDF Export ────────────────────────────────────────────────────────────
-  async function exportPDF() {
+  // ── PDF Export (print-to-PDF via browser) ─────────────────────────────────
+  function exportPDF() {
     try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: autoTable } = await import("jspdf-autotable");
-
-      const doc = new jsPDF();
-      const title = "Tengakhat Masjid Committee";
-      doc.setFontSize(16);
-      doc.setTextColor(0, 100, 50);
-      doc.text(title, 14, 16);
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 14, 23);
+      let tableHtml = "";
+      let tableTitle = "";
 
       if (activeReport === "members") {
-        doc.setFontSize(13);
-        doc.setTextColor(0, 0, 0);
-        doc.text("Member List", 14, 32);
-        autoTable(doc, {
-          startY: 36,
-          head: [["Member ID", "Name", "Phone", "Address", "Monthly Fee (₹)"]],
-          body: (members ?? []).map((m) => [
-            String(m.memberId),
-            m.name,
-            m.phone,
-            m.address || "—",
-            Number(m.monthlyFee).toLocaleString(),
-          ]),
-          headStyles: { fillColor: [0, 100, 50] },
-          alternateRowStyles: { fillColor: [240, 255, 245] },
-        });
-        doc.save("member-list.pdf");
+        tableTitle = "Member List";
+        tableHtml = `
+          <table>
+            <thead><tr><th>Member ID</th><th>Name</th><th>Phone</th><th>Address</th><th>Monthly Fee (&#8377;)</th></tr></thead>
+            <tbody>
+              ${(members ?? []).map((m) => `<tr><td>#${m.memberId}</td><td>${m.name}</td><td>${m.phone}</td><td>${m.address || "\u2014"}</td><td>&#8377;${Number(m.monthlyFee).toLocaleString()}</td></tr>`).join("")}
+            </tbody>
+          </table>`;
       } else if (activeReport === "payments") {
-        doc.setFontSize(13);
-        doc.setTextColor(0, 0, 0);
-        doc.text("Payment History", 14, 32);
-        autoTable(doc, {
-          startY: 36,
-          head: [
-            [
-              "Payment ID",
-              "Member",
-              "Month/Year",
-              "Amount (₹)",
-              "Status",
-              "Mode",
-            ],
-          ],
-          body: (payments ?? []).map((p) => [
-            String(p.paymentId),
-            memberMap.get(String(p.memberId))?.name ?? String(p.memberId),
-            `${MONTHS[Number(p.month) - 1]} ${Number(p.year)}`,
-            Number(p.amountPaid).toLocaleString(),
-            p.status,
-            p.paymentMode,
-          ]),
-          headStyles: { fillColor: [0, 100, 50] },
-          alternateRowStyles: { fillColor: [240, 255, 245] },
-        });
-        doc.save("payment-history.pdf");
+        tableTitle = "Payment History";
+        tableHtml = `
+          <table>
+            <thead><tr><th>Payment ID</th><th>Member</th><th>Month/Year</th><th>Amount (&#8377;)</th><th>Status</th><th>Mode</th></tr></thead>
+            <tbody>
+              ${(payments ?? []).map((p) => `<tr><td>#${p.paymentId}</td><td>${memberMap.get(String(p.memberId))?.name ?? `#${p.memberId}`}</td><td>${MONTHS[Number(p.month) - 1]} ${Number(p.year)}</td><td>&#8377;${Number(p.amountPaid).toLocaleString()}</td><td>${p.status}</td><td>${p.paymentMode}</td></tr>`).join("")}
+            </tbody>
+          </table>`;
       } else {
-        doc.setFontSize(13);
-        doc.setTextColor(0, 0, 0);
-        doc.text(
-          `Monthly Summary — ${MONTHS[summaryMonth - 1]} ${summaryYear}`,
-          14,
-          32,
-        );
         const totalCollected = summaryData.reduce(
           (s, r) => s + r.amountPaid,
           0,
         );
         const totalFees = summaryData.reduce((s, r) => s + r.monthlyFee, 0);
-        doc.setFontSize(10);
-        doc.setTextColor(60);
-        doc.text(
-          `Total Collected: ₹${totalCollected.toLocaleString()}  |  Total Fees: ₹${totalFees.toLocaleString()}  |  Pending: ₹${(totalFees - totalCollected).toLocaleString()}`,
-          14,
-          39,
-        );
-        autoTable(doc, {
-          startY: 44,
-          head: [
-            [
-              "Member ID",
-              "Name",
-              "Monthly Fee (₹)",
-              "Paid (₹)",
-              "Status",
-              "Mode",
-            ],
-          ],
-          body: summaryData.map((r) => [
-            r.memberId,
-            r.name,
-            r.monthlyFee.toLocaleString(),
-            r.amountPaid.toLocaleString(),
-            r.status,
-            r.paymentMode,
-          ]),
-          headStyles: { fillColor: [0, 100, 50] },
-          alternateRowStyles: { fillColor: [240, 255, 245] },
-          bodyStyles: { fontSize: 9 },
-        });
-        doc.save(`summary-${MONTHS[summaryMonth - 1]}-${summaryYear}.pdf`);
+        tableTitle = `Monthly Summary \u2014 ${MONTHS[summaryMonth - 1]} ${summaryYear}`;
+        tableHtml = `
+          <p class="summary-stats">Total Collected: &#8377;${totalCollected.toLocaleString()} &nbsp;|&nbsp; Total Fees: &#8377;${totalFees.toLocaleString()} &nbsp;|&nbsp; Pending: &#8377;${(totalFees - totalCollected).toLocaleString()}</p>
+          <table>
+            <thead><tr><th>Member ID</th><th>Name</th><th>Monthly Fee (&#8377;)</th><th>Paid (&#8377;)</th><th>Status</th><th>Mode</th></tr></thead>
+            <tbody>
+              ${summaryData.map((r) => `<tr><td>#${r.memberId}</td><td>${r.name}</td><td>${r.monthlyFee.toLocaleString()}</td><td>${r.amountPaid.toLocaleString()}</td><td>${r.status}</td><td>${r.paymentMode}</td></tr>`).join("")}
+            </tbody>
+          </table>`;
       }
 
-      toast.success("PDF downloaded successfully");
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${tableTitle}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+          h1 { color: #006633; font-size: 20px; margin-bottom: 4px; }
+          h2 { font-size: 15px; color: #444; margin-bottom: 12px; }
+          .summary-stats { font-size: 12px; color: #555; margin-bottom: 10px; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th { background: #006633; color: white; padding: 6px 10px; text-align: left; }
+          td { padding: 5px 10px; border-bottom: 1px solid #ddd; }
+          tr:nth-child(even) td { background: #f0fff4; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head><body>
+        <h1>Tengakhat Masjid Committee</h1>
+        <h2>${tableTitle}</h2>
+        <p style="font-size:11px;color:#888;">Generated: ${new Date().toLocaleDateString("en-IN")}</p>
+        ${tableHtml}
+      </body></html>`;
+
+      const win = window.open("", "_blank");
+      if (!win) {
+        toast.error("Popup blocked. Please allow popups to export PDF.");
+        return;
+      }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+      }, 500);
+      toast.success("Print dialog opened — save as PDF");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to generate PDF");
+      toast.error("Failed to generate PDF. Please try again.");
     }
   }
 
-  // ── Excel Export ──────────────────────────────────────────────────────────
-  async function exportExcel() {
+  // ── CSV/Excel Export ──────────────────────────────────────────────────────
+  function exportExcel() {
     try {
-      const XLSX = await import("xlsx");
-
-      let wb: ReturnType<typeof XLSX.utils.book_new>;
-      let ws: ReturnType<typeof XLSX.utils.aoa_to_sheet>;
-      let filename: string;
+      let csvContent = "";
+      let filename = "";
 
       if (activeReport === "members") {
         const rows = [
-          ["Member ID", "Name", "Phone", "Address", "Monthly Fee (₹)"],
+          ["Member ID", "Name", "Phone", "Address", "Monthly Fee (INR)"],
           ...(members ?? []).map((m) => [
             String(m.memberId),
             m.name,
@@ -208,10 +198,8 @@ export default function ReportsTab() {
             Number(m.monthlyFee),
           ]),
         ];
-        ws = XLSX.utils.aoa_to_sheet(rows);
-        wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Members");
-        filename = "member-list.xlsx";
+        csvContent = rows.map(rowToCsv).join("\n");
+        filename = "member-list.csv";
       } else if (activeReport === "payments") {
         const rows = [
           [
@@ -219,7 +207,7 @@ export default function ReportsTab() {
             "Member",
             "Month",
             "Year",
-            "Amount (₹)",
+            "Amount (INR)",
             "Status",
             "Mode",
           ],
@@ -233,10 +221,8 @@ export default function ReportsTab() {
             p.paymentMode,
           ]),
         ];
-        ws = XLSX.utils.aoa_to_sheet(rows);
-        wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Payments");
-        filename = "payment-history.xlsx";
+        csvContent = rows.map(rowToCsv).join("\n");
+        filename = "payment-history.csv";
       } else {
         const rows = [
           [`Monthly Summary: ${MONTHS[summaryMonth - 1]} ${summaryYear}`],
@@ -244,8 +230,8 @@ export default function ReportsTab() {
           [
             "Member ID",
             "Name",
-            "Monthly Fee (₹)",
-            "Paid (₹)",
+            "Monthly Fee (INR)",
+            "Paid (INR)",
             "Status",
             "Mode",
           ],
@@ -267,17 +253,16 @@ export default function ReportsTab() {
             "",
           ],
         ];
-        ws = XLSX.utils.aoa_to_sheet(rows);
-        wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Summary");
-        filename = `summary-${MONTHS[summaryMonth - 1]}-${summaryYear}.xlsx`;
+        csvContent = rows.map(rowToCsv).join("\n");
+        filename = `summary-${MONTHS[summaryMonth - 1]}-${summaryYear}.csv`;
       }
 
-      XLSX.writeFile(wb, filename);
-      toast.success("Excel file downloaded successfully");
+      // Add BOM for Excel UTF-8 compatibility
+      downloadFile(`FEFF${csvContent}`, filename, "text/csv;charset=utf-8;");
+      toast.success("CSV file downloaded successfully");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to generate Excel file");
+      toast.error("Failed to generate file. Please try again.");
     }
   }
 
@@ -293,7 +278,7 @@ export default function ReportsTab() {
       <div>
         <h2 className="text-2xl font-bold text-foreground">Reports & Export</h2>
         <p className="text-muted-foreground text-sm">
-          Download reports as PDF or Excel
+          Download reports as PDF or CSV
         </p>
       </div>
 
@@ -304,6 +289,7 @@ export default function ReportsTab() {
             key={tab.id}
             type="button"
             onClick={() => setActiveReport(tab.id)}
+            data-ocid={`reports.${tab.id}.tab`}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
               activeReport === tab.id
                 ? "bg-primary text-white border-primary shadow-sm"
@@ -357,7 +343,7 @@ export default function ReportsTab() {
           onClick={exportPDF}
           disabled={isLoading}
           className="bg-red-600 hover:bg-red-700 text-white"
-          data-ocid="reports.export_pdf.button"
+          data-ocid="reports.pdf.button"
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -370,20 +356,23 @@ export default function ReportsTab() {
           onClick={exportExcel}
           disabled={isLoading}
           className="bg-green-700 hover:bg-green-800 text-white"
-          data-ocid="reports.export_excel.button"
+          data-ocid="reports.excel.button"
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
             <FileSpreadsheet className="w-4 h-4 mr-2" />
           )}
-          Export Excel
+          Export CSV
         </Button>
       </div>
 
       {/* Preview table */}
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <div
+          className="text-center py-12 text-muted-foreground"
+          data-ocid="reports.loading_state"
+        >
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
           Loading data...
         </div>
@@ -430,10 +419,10 @@ export default function ReportsTab() {
                         {m.phone}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {m.address || "—"}
+                        {m.address || "\u2014"}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">
-                        ₹{Number(m.monthlyFee).toLocaleString()}
+                        &#8377;{Number(m.monthlyFee).toLocaleString()}
                       </td>
                     </tr>
                   ))
@@ -490,7 +479,7 @@ export default function ReportsTab() {
                         {MONTHS[Number(p.month) - 1]} {Number(p.year)}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">
-                        ₹{Number(p.amountPaid).toLocaleString()}
+                        &#8377;{Number(p.amountPaid).toLocaleString()}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -516,7 +505,7 @@ export default function ReportsTab() {
                 <div className="px-4 py-3 text-center">
                   <p className="text-xs text-muted-foreground">Total Fee Due</p>
                   <p className="font-bold text-foreground">
-                    ₹
+                    &#8377;
                     {summaryData
                       .reduce((s, r) => s + r.monthlyFee, 0)
                       .toLocaleString()}
@@ -525,7 +514,7 @@ export default function ReportsTab() {
                 <div className="px-4 py-3 text-center">
                   <p className="text-xs text-muted-foreground">Collected</p>
                   <p className="font-bold text-green-700">
-                    ₹
+                    &#8377;
                     {summaryData
                       .reduce((s, r) => s + r.amountPaid, 0)
                       .toLocaleString()}
@@ -534,7 +523,7 @@ export default function ReportsTab() {
                 <div className="px-4 py-3 text-center">
                   <p className="text-xs text-muted-foreground">Pending</p>
                   <p className="font-bold text-red-600">
-                    ₹
+                    &#8377;
                     {(
                       summaryData.reduce((s, r) => s + r.monthlyFee, 0) -
                       summaryData.reduce((s, r) => s + r.amountPaid, 0)
@@ -554,10 +543,10 @@ export default function ReportsTab() {
                     </th>
                     <th className="text-left px-4 py-3 font-semibold">Name</th>
                     <th className="text-right px-4 py-3 font-semibold">
-                      Fee (₹)
+                      Fee (&#8377;)
                     </th>
                     <th className="text-right px-4 py-3 font-semibold">
-                      Paid (₹)
+                      Paid (&#8377;)
                     </th>
                     <th className="text-left px-4 py-3 font-semibold">
                       Status

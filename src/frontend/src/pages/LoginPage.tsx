@@ -6,6 +6,7 @@ import { Loader2, Lock, User } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useMembers } from "../hooks/useQueries";
 
 interface Props {
   onAdminLogin: () => void;
@@ -29,6 +30,13 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
   const [memberLoading, setMemberLoading] = useState(false);
   const [memberError, setMemberError] = useState("");
 
+  // Fetch members list so we can validate the Member ID on login
+  const {
+    data: allMembers,
+    isLoading: membersLoading,
+    isError: membersError,
+  } = useMembers();
+
   async function handleAdminSubmit(e: React.FormEvent) {
     e.preventDefault();
     setAdminError("");
@@ -48,7 +56,6 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
     e.preventDefault();
     setMemberError("");
     setMemberLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
 
     const id = memberId.trim();
     if (!id) {
@@ -56,6 +63,33 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
       setMemberLoading(false);
       return;
     }
+
+    // If members list failed to load, we can't verify
+    if (membersError) {
+      setMemberError("Could not verify Member ID. Please try again.");
+      setMemberLoading(false);
+      return;
+    }
+
+    // If members list is still loading, wait briefly then re-check
+    if (membersLoading || !allMembers) {
+      setMemberError("Verifying... Please try again in a moment.");
+      setMemberLoading(false);
+      return;
+    }
+
+    // Check that the Member ID exists in the backend
+    const matchedMember = allMembers.find((m) => String(m.memberId) === id);
+    if (!matchedMember) {
+      setMemberError(
+        "Member ID not found. Please check your ID or contact your admin.",
+      );
+      toast.error("Login failed");
+      setMemberLoading(false);
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, 400));
 
     // PIN lookup from localStorage (default 1234 if not set)
     const pins: Record<string, string> = JSON.parse(
@@ -267,7 +301,10 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
                   login.
                 </p>
                 {memberError && (
-                  <p className="text-sm text-destructive text-center bg-destructive/10 rounded-lg py-2 px-3">
+                  <p
+                    data-ocid="member.login.error_state"
+                    className="text-sm text-destructive text-center bg-destructive/10 rounded-lg py-2 px-3"
+                  >
                     {memberError}
                   </p>
                 )}
@@ -284,7 +321,7 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
                   {memberLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Signing in...
+                      Verifying...
                     </>
                   ) : (
                     <>
