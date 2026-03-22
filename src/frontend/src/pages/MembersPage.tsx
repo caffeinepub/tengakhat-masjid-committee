@@ -46,6 +46,8 @@ interface MemberForm {
   phone: string;
   address: string;
   monthlyFee: string;
+  previousBalance: string;
+  loginId: string;
 }
 
 const emptyForm: MemberForm = {
@@ -53,7 +55,30 @@ const emptyForm: MemberForm = {
   phone: "",
   address: "",
   monthlyFee: "",
+  previousBalance: "0",
+  loginId: "",
 };
+
+// Previous balances stored in localStorage by memberId (frontend-managed)
+function getPrevBalances(): Record<string, number> {
+  return JSON.parse(localStorage.getItem("tmc_prev_balances") ?? "{}");
+}
+
+function getLoginIds(): Record<string, string> {
+  return JSON.parse(localStorage.getItem("tmc_member_login_ids") ?? "{}");
+}
+
+function saveLoginIds(ids: Record<string, string>) {
+  localStorage.setItem("tmc_member_login_ids", JSON.stringify(ids));
+}
+
+// Validate login ID: letters only OR 001-999
+function isValidLoginId(id: string): boolean {
+  return (
+    /^[a-zA-Z]+$/.test(id) ||
+    /^(0[0-9][1-9]|0[1-9][0-9]|[1-9][0-9]{2})$/.test(id)
+  );
+}
 
 export default function MembersPage() {
   const [search, setSearch] = useState("");
@@ -76,6 +101,9 @@ export default function MembersPage() {
   const getPhotos = (): Record<string, string> =>
     JSON.parse(localStorage.getItem("tmc_member_photos") ?? "{}");
 
+  const photos = getPhotos();
+  const prevBalances = getPrevBalances();
+
   const filtered = (members ?? []).filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -92,15 +120,23 @@ export default function MembersPage() {
 
   function openEditModal(member: Member) {
     setEditMember(member);
+    const prevBals = getPrevBalances();
+    // Find the current loginId for this member
+    const loginIds = getLoginIds();
+    const memberIdStr = String(member.memberId);
+    const existingLoginId =
+      Object.entries(loginIds).find(([, v]) => v === memberIdStr)?.[0] ?? "";
     setForm({
       name: member.name,
       phone: member.phone,
       address: member.address,
       monthlyFee: String(member.monthlyFee),
+      previousBalance: String(prevBals[memberIdStr] ?? 0),
+      loginId: existingLoginId,
     });
     setFormError("");
-    const photos = getPhotos();
-    setPhotoPreview(photos[String(member.memberId)] ?? null);
+    const photos2 = getPhotos();
+    setPhotoPreview(photos2[memberIdStr] ?? null);
     setModalOpen(true);
   }
 
@@ -114,11 +150,25 @@ export default function MembersPage() {
     reader.readAsDataURL(file);
   }
 
+  // Auto-fill loginId from name if loginId is empty
+  function handleNameChange(name: string) {
+    setForm((f) => ({
+      ...f,
+      name,
+      loginId: f.loginId === "" ? name.split(" ")[0].toLowerCase() : f.loginId,
+    }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
 
     const fee = Number.parseInt(form.monthlyFee, 10);
+    const prevBalParsed = Number.parseInt(form.previousBalance, 10);
+    const previousBalance = Number.isNaN(prevBalParsed)
+      ? 0
+      : Math.max(0, prevBalParsed);
+
     if (!form.name.trim()) {
       setFormError("Name is required.");
       return;
@@ -129,6 +179,30 @@ export default function MembersPage() {
     }
     if (Number.isNaN(fee) || fee <= 0) {
       setFormError("Monthly fee must be a positive number.");
+      return;
+    }
+
+    // Validate loginId
+    const loginIdVal = form.loginId.trim();
+    if (!loginIdVal) {
+      setFormError("Member Login ID is required.");
+      return;
+    }
+    if (!isValidLoginId(loginIdVal)) {
+      setFormError(
+        "Login ID must be letters only (first name) or a 3-digit number (001–999).",
+      );
+      return;
+    }
+
+    // Check login ID uniqueness (not taken by another member)
+    const loginIds = getLoginIds();
+    const takenBy = loginIds[loginIdVal.toLowerCase()];
+    const memberIdStr = editMember ? String(editMember.memberId) : null;
+    if (takenBy && takenBy !== memberIdStr) {
+      setFormError(
+        `Login ID "${loginIdVal}" is already taken by another member. Please choose a different one.`,
+      );
       return;
     }
 
@@ -143,10 +217,24 @@ export default function MembersPage() {
         });
         // Save photo
         if (photoPreview) {
-          const photos = getPhotos();
-          photos[String(editMember.memberId)] = photoPreview;
-          localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
+          const photosMap = getPhotos();
+          photosMap[String(editMember.memberId)] = photoPreview;
+          localStorage.setItem("tmc_member_photos", JSON.stringify(photosMap));
         }
+        // Save previous balance
+        const prevBals = getPrevBalances();
+        prevBals[String(editMember.memberId)] = previousBalance;
+        localStorage.setItem("tmc_prev_balances", JSON.stringify(prevBals));
+        // Save login ID (remove old entry first)
+        const ids = getLoginIds();
+        // Remove old entry pointing to this member
+        for (const key of Object.keys(ids)) {
+          if (ids[key] === String(editMember.memberId)) {
+            delete ids[key];
+          }
+        }
+        ids[loginIdVal.toLowerCase()] = String(editMember.memberId);
+        saveLoginIds(ids);
         toast.success("Member updated successfully");
       } else {
         const newId = await addMember.mutateAsync({
@@ -157,9 +245,19 @@ export default function MembersPage() {
         });
         // Save photo for new member
         if (photoPreview && newId) {
-          const photos = getPhotos();
-          photos[String(newId)] = photoPreview;
-          localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
+          const photosMap = getPhotos();
+          photosMap[String(newId)] = photoPreview;
+          localStorage.setItem("tmc_member_photos", JSON.stringify(photosMap));
+        }
+        // Save previous balance for new member
+        if (newId) {
+          const prevBals = getPrevBalances();
+          prevBals[String(newId)] = previousBalance;
+          localStorage.setItem("tmc_prev_balances", JSON.stringify(prevBals));
+          // Save login ID
+          const ids = getLoginIds();
+          ids[loginIdVal.toLowerCase()] = String(newId);
+          saveLoginIds(ids);
         }
         toast.success("Member added successfully");
       }
@@ -178,9 +276,21 @@ export default function MembersPage() {
     try {
       await deleteMember.mutateAsync(deleteTarget.memberId);
       // Remove photo
-      const photos = getPhotos();
-      delete photos[String(deleteTarget.memberId)];
-      localStorage.setItem("tmc_member_photos", JSON.stringify(photos));
+      const photosMap = getPhotos();
+      delete photosMap[String(deleteTarget.memberId)];
+      localStorage.setItem("tmc_member_photos", JSON.stringify(photosMap));
+      // Remove previous balance
+      const prevBals = getPrevBalances();
+      delete prevBals[String(deleteTarget.memberId)];
+      localStorage.setItem("tmc_prev_balances", JSON.stringify(prevBals));
+      // Remove login ID
+      const ids = getLoginIds();
+      for (const key of Object.keys(ids)) {
+        if (ids[key] === String(deleteTarget.memberId)) {
+          delete ids[key];
+        }
+      }
+      saveLoginIds(ids);
       toast.success("Member deleted");
       setDeleteTarget(null);
     } catch (err) {
@@ -200,24 +310,19 @@ export default function MembersPage() {
     setPinResetTarget(null);
   }
 
-  const isSaving = addMember.isPending || updateMember.isPending;
-  const photos = getPhotos();
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Members</h2>
-          <p className="text-muted-foreground text-sm">
-            {members?.length ?? 0} member
-            {(members?.length ?? 0) !== 1 ? "s" : ""} registered
+          <h2 className="text-xl font-bold text-foreground">Members</h2>
+          <p className="text-sm text-muted-foreground">
+            {members?.length ?? 0} total members
           </p>
         </div>
         <Button
-          data-ocid="members.add.open_modal_button"
           onClick={openAddModal}
-          className="bg-primary hover:bg-primary/90 text-white"
+          data-ocid="members.add.primary_button"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Member
@@ -273,6 +378,9 @@ export default function MembersPage() {
                     Name
                   </th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">
+                    Login ID
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-foreground">
                     Phone
                   </th>
                   <th className="text-left px-4 py-3 font-semibold text-foreground">
@@ -281,185 +389,236 @@ export default function MembersPage() {
                   <th className="text-right px-4 py-3 font-semibold text-foreground">
                     Monthly Fee
                   </th>
+                  <th className="text-right px-4 py-3 font-semibold text-foreground">
+                    Prev. Balance
+                  </th>
                   <th className="text-center px-4 py-3 font-semibold text-foreground">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((member, idx) => (
-                  <tr
-                    key={String(member.memberId)}
-                    data-ocid={`members.item.${idx + 1}`}
-                    className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div
-                        className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center"
-                        style={{ borderColor: "#D4AF37" }}
-                      >
-                        {photos[String(member.memberId)] ? (
-                          <img
-                            src={photos[String(member.memberId)]}
-                            alt={member.name}
-                            className="w-full h-full object-cover"
-                          />
+                {filtered.map((member, idx) => {
+                  const prevBal = prevBalances[String(member.memberId)] ?? 0;
+                  const loginIds2 = getLoginIds();
+                  const memberLoginId =
+                    Object.entries(loginIds2).find(
+                      ([, v]) => v === String(member.memberId),
+                    )?.[0] ?? "—";
+                  return (
+                    <tr
+                      key={String(member.memberId)}
+                      data-ocid={`members.item.${idx + 1}`}
+                      className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <div
+                          className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center"
+                          style={{ borderColor: "#D4AF37" }}
+                        >
+                          {photos[String(member.memberId)] ? (
+                            <img
+                              src={photos[String(member.memberId)]}
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-green-50">
+                              <User className="w-5 h-5 text-green-700" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          #{String(member.memberId)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 font-medium">{member.name}</td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          className="font-mono text-xs"
+                          style={{
+                            background: "#e8f5ee",
+                            color: "#004d26",
+                            border: "1px solid #b8dfc9",
+                          }}
+                        >
+                          {memberLoginId}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {member.phone}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">
+                        {member.address || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        ₹{Number(member.monthlyFee).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {prevBal > 0 ? (
+                          <span className="text-amber-700 font-semibold">
+                            ₹{prevBal.toLocaleString()}
+                          </span>
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-green-50">
-                            <User className="w-5 h-5 text-green-700" />
-                          </div>
+                          <span className="text-green-600 text-sm">—</span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="font-mono text-xs">
-                        #{String(member.memberId)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 font-medium">{member.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {member.phone}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">
-                      {member.address || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold">
-                      ₹{Number(member.monthlyFee).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-ocid={`members.item.${idx + 1}.edit_button`}
-                          onClick={() => openEditModal(member)}
-                          className="h-8 w-8 text-blue-600 hover:bg-blue-50"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-ocid={`members.item.${idx + 1}.delete_button`}
-                          onClick={() => setDeleteTarget(member)}
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-ocid={`members.item.${idx + 1}.payment_button`}
-                          onClick={() => setPaymentTarget(member)}
-                          className="h-8 w-8 text-primary hover:bg-primary/10"
-                          title="Record Payment"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-ocid={`members.item.${idx + 1}.button`}
-                          onClick={() => setPinResetTarget(member)}
-                          className="h-8 w-8 text-amber-600 hover:bg-amber-50"
-                          title="Reset PIN"
-                        >
-                          <KeyRound className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-ocid={`members.item.${idx + 1}.edit_button`}
+                            onClick={() => openEditModal(member)}
+                            className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-ocid={`members.item.${idx + 1}.delete_button`}
+                            onClick={() => setDeleteTarget(member)}
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-ocid={`members.item.${idx + 1}.payment_button`}
+                            onClick={() => setPaymentTarget(member)}
+                            className="h-8 w-8 text-primary hover:bg-primary/10"
+                            title="Record Payment"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-ocid={`members.item.${idx + 1}.button`}
+                            onClick={() => setPinResetTarget(member)}
+                            className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                            title="Reset PIN"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
-            {filtered.map((member, idx) => (
-              <div
-                key={String(member.memberId)}
-                data-ocid={`members.item.${idx + 1}`}
-                className="bg-white rounded-xl border border-border p-4 shadow-sm"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-12 h-12 rounded-full overflow-hidden border-2 flex-shrink-0"
-                    style={{ borderColor: "#D4AF37" }}
-                  >
-                    {photos[String(member.memberId)] ? (
-                      <img
-                        src={photos[String(member.memberId)]}
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-green-50">
-                        <User className="w-6 h-6 text-green-700" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="font-mono text-xs">
-                        #{String(member.memberId)}
-                      </Badge>
-                      <span className="font-semibold text-foreground truncate">
-                        {member.name}
-                      </span>
+            {filtered.map((member, idx) => {
+              const prevBal = prevBalances[String(member.memberId)] ?? 0;
+              const loginIds2 = getLoginIds();
+              const memberLoginId =
+                Object.entries(loginIds2).find(
+                  ([, v]) => v === String(member.memberId),
+                )?.[0] ?? "—";
+              return (
+                <div
+                  key={String(member.memberId)}
+                  data-ocid={`members.item.${idx + 1}`}
+                  className="bg-white rounded-xl border border-border p-4 shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-12 h-12 rounded-full overflow-hidden border-2 flex-shrink-0"
+                      style={{ borderColor: "#D4AF37" }}
+                    >
+                      {photos[String(member.memberId)] ? (
+                        <img
+                          src={photos[String(member.memberId)]}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-green-50">
+                          <User className="w-6 h-6 text-green-700" />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {member.phone}
-                    </p>
-                    {member.address && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {member.address}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          #{String(member.memberId)}
+                        </Badge>
+                        <span className="font-semibold text-foreground truncate">
+                          {member.name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Login ID:{" "}
+                        <span className="font-mono font-medium text-green-800">
+                          {memberLoginId}
+                        </span>
                       </p>
-                    )}
-                    <p className="text-sm font-semibold text-primary mt-1">
-                      ₹{Number(member.monthlyFee).toLocaleString()}/mo
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditModal(member)}
-                      className="h-8 w-8 text-blue-600"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteTarget(member)}
-                      className="h-8 w-8 text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setPaymentTarget(member)}
-                      className="h-8 w-8 text-primary"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setPinResetTarget(member)}
-                      className="h-8 w-8 text-amber-600"
-                      title="Reset PIN"
-                    >
-                      <KeyRound className="w-4 h-4" />
-                    </Button>
+                      <p className="text-sm text-muted-foreground">
+                        {member.phone}
+                      </p>
+                      {member.address && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {member.address}
+                        </p>
+                      )}
+                      <p className="text-sm font-semibold text-primary mt-1">
+                        ₹{Number(member.monthlyFee).toLocaleString()}/mo
+                      </p>
+                      {prevBal > 0 && (
+                        <p className="text-xs font-semibold text-amber-700 mt-0.5">
+                          Prev. Balance: ₹{prevBal.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditModal(member)}
+                        className="h-8 w-8 text-blue-600"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteTarget(member)}
+                        className="h-8 w-8 text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setPaymentTarget(member)}
+                        className="h-8 w-8 text-primary"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setPinResetTarget(member)}
+                        className="h-8 w-8 text-amber-600"
+                        title="Reset PIN"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -521,12 +680,29 @@ export default function MembersPage() {
                 data-ocid="members.name.input"
                 placeholder="e.g. Mohammed Rashid"
                 value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
+                onChange={(e) => handleNameChange(e.target.value)}
                 required
               />
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="m-login-id">Member Login ID *</Label>
+              <Input
+                id="m-login-id"
+                data-ocid="members.login_id.input"
+                placeholder="e.g. rashid or 042"
+                value={form.loginId}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, loginId: e.target.value }))
+                }
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                First name (letters only) or a 3-digit number (001–999). Used by
+                member to log in.
+              </p>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="m-phone">Phone Number *</Label>
               <Input
@@ -568,6 +744,23 @@ export default function MembersPage() {
                 required
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="m-prev-bal">Previous Balance (₹)</Label>
+              <Input
+                id="m-prev-bal"
+                data-ocid="members.previousBalance.input"
+                type="number"
+                min="0"
+                placeholder="e.g. 1500"
+                value={form.previousBalance}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, previousBalance: e.target.value }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter any outstanding balance from before the app
+              </p>
+            </div>
             {formError && (
               <p
                 data-ocid="members.form.error_state"
@@ -588,16 +781,16 @@ export default function MembersPage() {
               <Button
                 type="submit"
                 data-ocid="members.form.submit_button"
-                className="bg-primary hover:bg-primary/90 text-white"
-                disabled={isSaving}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                disabled={addMember.isPending || updateMember.isPending}
               >
-                {isSaving ? (
+                {addMember.isPending || updateMember.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {editMember ? "Updating..." : "Adding..."}
+                    Saving...
                   </>
                 ) : editMember ? (
-                  "Update Member"
+                  "Save Changes"
                 ) : (
                   "Add Member"
                 )}
@@ -628,7 +821,8 @@ export default function MembersPage() {
             <AlertDialogAction
               data-ocid="members.delete.confirm_button"
               onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90 text-white"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMember.isPending}
             >
               {deleteMember.isPending ? (
                 <>
@@ -648,22 +842,22 @@ export default function MembersPage() {
         open={!!pinResetTarget}
         onOpenChange={(open) => !open && setPinResetTarget(null)}
       >
-        <AlertDialogContent data-ocid="members.pin-reset.dialog">
+        <AlertDialogContent data-ocid="members.pin_reset.dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Reset Member PIN</AlertDialogTitle>
             <AlertDialogDescription>
-              Reset PIN for <strong>{pinResetTarget?.name}</strong>? Their PIN
-              will be reset to <strong>1234</strong>.
+              Reset the PIN for <strong>{pinResetTarget?.name}</strong> back to
+              the default <strong>1234</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-ocid="members.pin-reset.cancel_button">
+            <AlertDialogCancel data-ocid="members.pin_reset.cancel_button">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              data-ocid="members.pin-reset.confirm_button"
+              data-ocid="members.pin_reset.confirm_button"
               onClick={handlePinReset}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               Reset PIN
             </AlertDialogAction>

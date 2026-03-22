@@ -4,19 +4,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, KeyRound, LogOut, User } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  LogOut,
+  User,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import UpiPaymentPanel from "../components/UpiPaymentPanel";
-import { useAllPayments, useMembers } from "../hooks/useQueries";
+import { useAddPayment, useAllPayments, useMembers } from "../hooks/useQueries";
 
 interface Props {
   memberId: string;
   onLogout: () => void;
 }
 
-type MemberTab = "profile" | "history" | "status" | "pay" | "pin";
+type MemberTab = "profile" | "history" | "status" | "pay" | "prevbal" | "pin";
 
 const MONTHS = [
   "Jan",
@@ -33,13 +40,33 @@ const MONTHS = [
   "Dec",
 ];
 
+const MONTHS_FULL = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 const TAB_LIST: { id: MemberTab; label: string }[] = [
   { id: "profile", label: "Profile" },
   { id: "history", label: "Pay History" },
   { id: "status", label: "Monthly Status" },
   { id: "pay", label: "Pay Now" },
+  { id: "prevbal", label: "Prev. Balance" },
   { id: "pin", label: "Change PIN" },
 ];
+
+function getPrevBalances(): Record<string, number> {
+  return JSON.parse(localStorage.getItem("tmc_prev_balances") ?? "{}");
+}
 
 function ProfileSkeleton() {
   return (
@@ -64,6 +91,11 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinError, setPinError] = useState("");
+  const [prevBalPayAmount, setPrevBalPayAmount] = useState<number>(0);
+  // Counter to force re-read of localStorage after prev balance payment
+  const [balanceRefresh, setBalanceRefresh] = useState(0);
+  const [payConfirmLoading, setPayConfirmLoading] = useState(false);
+  const [prevBalConfirmLoading, setPrevBalConfirmLoading] = useState(false);
 
   const {
     data: allMembers,
@@ -72,7 +104,15 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
   } = useMembers();
   const { data: allPayments } = useAllPayments();
 
+  const addPayment = useAddPayment();
+
   const member = allMembers?.find((m) => String(m.memberId) === memberId);
+
+  // Previous balance is stored in localStorage by admin
+  // balanceRefresh dependency forces re-read after payment
+  const prevBalances =
+    balanceRefresh >= 0 ? getPrevBalances() : getPrevBalances();
+  const memberPrevBal = prevBalances[memberId] ?? 0;
 
   const myPayments = (allPayments ?? []).filter(
     (p) => String(p.memberId) === memberId,
@@ -102,6 +142,68 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
     toast.success("PIN changed successfully!");
     setNewPin("");
     setConfirmPin("");
+  }
+
+  async function handleConfirmMonthlyPayment() {
+    if (!member) return;
+    setPayConfirmLoading(true);
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    try {
+      await addPayment.mutateAsync({
+        memberId: member.memberId,
+        month: currentMonth,
+        year: currentYear,
+        amountPaid: Number(member.monthlyFee),
+        status: "Paid",
+        paymentMode: "UPI",
+      });
+      toast.success(
+        `Payment recorded! Your monthly fee for ${MONTHS_FULL[currentMonth - 1]} ${currentYear} has been updated.`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast.error(`Failed to record payment: ${msg}`);
+    }
+    setPayConfirmLoading(false);
+  }
+
+  async function handleConfirmPrevBalPayment() {
+    if (!member) return;
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const payAmount =
+      prevBalPayAmount > 0 && prevBalPayAmount <= memberPrevBal
+        ? prevBalPayAmount
+        : memberPrevBal;
+    if (payAmount <= 0) return;
+    setPrevBalConfirmLoading(true);
+    try {
+      await addPayment.mutateAsync({
+        memberId: member.memberId,
+        month: currentMonth,
+        year: currentYear,
+        amountPaid: payAmount,
+        status: "Paid",
+        paymentMode: "UPI",
+      });
+      // Deduct from localStorage
+      const bals = getPrevBalances();
+      const current = bals[memberId] ?? 0;
+      bals[memberId] = Math.max(0, current - payAmount);
+      localStorage.setItem("tmc_prev_balances", JSON.stringify(bals));
+      setBalanceRefresh((n) => n + 1);
+      setPrevBalPayAmount(0);
+      toast.success(
+        `Previous balance updated! ₹${payAmount.toLocaleString()} has been deducted from your outstanding balance.`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast.error(`Failed to record payment: ${msg}`);
+    }
+    setPrevBalConfirmLoading(false);
   }
 
   const currentYear = new Date().getFullYear();
@@ -201,6 +303,19 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
             <p className="font-semibold">{member.address}</p>
           </div>
         )}
+        {memberPrevBal > 0 && (
+          <div
+            className="p-3 rounded-lg border"
+            style={{ background: "#fffbeb", borderColor: "#D4AF37" }}
+          >
+            <p className="text-xs text-amber-700 font-medium">
+              Outstanding Previous Balance
+            </p>
+            <p className="font-bold text-amber-800">
+              ₹{memberPrevBal.toLocaleString()}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -247,18 +362,202 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
       );
     }
     return (
-      <div>
-        <p className="text-sm text-muted-foreground mb-3">
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
           Scan the QR code or tap a button below to pay your monthly fee of{" "}
           <span className="font-semibold text-foreground">
             ₹{Number(member.monthlyFee).toLocaleString()}
           </span>
-          . After payment, inform the admin to mark it as paid.
+          .
         </p>
         <UpiPaymentPanel
           amount={Number(member.monthlyFee)}
           memberName={member.name}
         />
+        {/* Confirm Payment button */}
+        <div
+          className="mt-2 p-4 rounded-xl border"
+          style={{ background: "#f0fdf4", borderColor: "#86efac" }}
+        >
+          <p className="text-sm font-medium text-green-800 mb-3">
+            ✅ After completing payment via UPI, tap below to confirm and
+            automatically update your payment record:
+          </p>
+          <Button
+            type="button"
+            onClick={handleConfirmMonthlyPayment}
+            disabled={payConfirmLoading}
+            data-ocid="pay.confirm.primary_button"
+            className="w-full text-white font-semibold"
+            style={{
+              background: "linear-gradient(135deg, #006633 0%, #00A859 100%)",
+            }}
+          >
+            {payConfirmLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Recording Payment...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />I Have Completed This
+                Payment
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderPrevBalContent() {
+    if (membersLoading) {
+      return (
+        <div className="space-y-3" data-ocid="prevbal.loading_state">
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-32 rounded-lg" />
+        </div>
+      );
+    }
+    if (membersError || !member) {
+      return (
+        <div
+          className="flex flex-col items-center gap-3 py-10 px-4 rounded-lg text-center"
+          style={{ background: "#fff5f5" }}
+          data-ocid="prevbal.error_state"
+        >
+          <AlertCircle className="w-8 h-8 text-red-500" />
+          <p className="text-sm font-medium text-red-700">
+            Could not load balance data. Please try again.
+          </p>
+        </div>
+      );
+    }
+
+    if (memberPrevBal === 0) {
+      return (
+        <div
+          className="flex flex-col items-center gap-3 py-10 px-4 rounded-lg text-center"
+          style={{ background: "#f0fdf4" }}
+          data-ocid="prevbal.empty_state"
+        >
+          <div className="text-4xl">✅</div>
+          <p className="font-semibold text-green-700">No outstanding balance</p>
+          <p className="text-sm text-green-600">
+            You have no previous dues pending.
+          </p>
+        </div>
+      );
+    }
+
+    const payAmount =
+      prevBalPayAmount > 0 && prevBalPayAmount <= memberPrevBal
+        ? prevBalPayAmount
+        : memberPrevBal;
+
+    return (
+      <div className="space-y-4">
+        {/* Outstanding balance highlight */}
+        <div
+          className="p-4 rounded-xl border-2 text-center"
+          style={{ background: "#fffbeb", borderColor: "#D4AF37" }}
+        >
+          <p className="text-sm font-medium text-amber-700 mb-1">
+            Outstanding Previous Balance
+          </p>
+          <p className="text-3xl font-bold" style={{ color: "#92400e" }}>
+            ₹{memberPrevBal.toLocaleString()}
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            This is the balance carried forward from before the app was set up.
+          </p>
+        </div>
+
+        {/* Payment options */}
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-foreground">
+            Choose payment amount:
+          </p>
+
+          <Button
+            type="button"
+            onClick={() => setPrevBalPayAmount(memberPrevBal)}
+            data-ocid="prevbal.primary_button"
+            className="w-full text-white font-semibold"
+            style={{
+              background:
+                payAmount === memberPrevBal
+                  ? "linear-gradient(135deg, #006633 0%, #00A859 100%)"
+                  : undefined,
+            }}
+            variant={payAmount === memberPrevBal ? "default" : "outline"}
+          >
+            Pay in Full (₹{memberPrevBal.toLocaleString()})
+          </Button>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="partial-amount">Or pay a partial amount (₹)</Label>
+            <Input
+              id="partial-amount"
+              data-ocid="prevbal.input"
+              type="number"
+              min={1}
+              max={memberPrevBal}
+              placeholder={`1 – ${memberPrevBal}`}
+              value={
+                prevBalPayAmount > 0 && prevBalPayAmount < memberPrevBal
+                  ? prevBalPayAmount
+                  : ""
+              }
+              onChange={(e) => {
+                const val = Number.parseInt(e.target.value, 10);
+                if (!Number.isNaN(val) && val > 0 && val <= memberPrevBal) {
+                  setPrevBalPayAmount(val);
+                } else if (e.target.value === "") {
+                  setPrevBalPayAmount(0);
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* UPI Payment Panel */}
+        <div className="mt-2">
+          <UpiPaymentPanel amount={payAmount} memberName={member.name} />
+        </div>
+
+        {/* Confirm Payment button */}
+        <div
+          className="p-4 rounded-xl border"
+          style={{ background: "#f0fdf4", borderColor: "#86efac" }}
+        >
+          <p className="text-sm font-medium text-green-800 mb-3">
+            ✅ After completing payment, tap below to confirm and automatically
+            deduct ₹{payAmount.toLocaleString()} from your balance:
+          </p>
+          <Button
+            type="button"
+            onClick={handleConfirmPrevBalPayment}
+            disabled={prevBalConfirmLoading || payAmount <= 0}
+            data-ocid="prevbal.confirm.primary_button"
+            className="w-full text-white font-semibold"
+            style={{
+              background: "linear-gradient(135deg, #92400e 0%, #d97706 100%)",
+            }}
+          >
+            {prevBalConfirmLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Recording Payment...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />I Have Completed This
+                Payment
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -276,7 +575,7 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
             />
             <div className="flex items-center gap-3">
               <span className="hidden sm:block text-sm font-medium text-white/90">
-                Member #{memberId}
+                {member ? member.name : "Member"}
               </span>
               <Button
                 variant="ghost"
@@ -315,6 +614,14 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
               }`}
             >
               {tab.label}
+              {tab.id === "prevbal" && memberPrevBal > 0 && (
+                <Badge
+                  className="ml-1.5 text-xs px-1.5 py-0"
+                  style={{ background: "#D4AF37", color: "#000" }}
+                >
+                  !
+                </Badge>
+              )}
             </button>
           ))}
         </div>
@@ -483,6 +790,25 @@ export default function MemberPortal({ memberId, onLogout }: Props) {
               </CardHeader>
               <CardContent data-ocid="pay.card">
                 {renderPayContent()}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PREVIOUS BALANCE */}
+          {activeTab === "prevbal" && (
+            <Card
+              style={{
+                background: "rgba(255,255,255,0.97)",
+                border: "1px solid rgba(212,175,55,0.3)",
+              }}
+            >
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">
+                  Previous Balance
+                </CardTitle>
+              </CardHeader>
+              <CardContent data-ocid="prevbal.card">
+                {renderPrevBalContent()}
               </CardContent>
             </Card>
           )}

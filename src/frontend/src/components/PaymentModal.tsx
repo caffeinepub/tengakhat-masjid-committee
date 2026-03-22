@@ -45,6 +45,10 @@ const YEARS = Array.from(
   (_, i) => 2020 + i,
 );
 
+function getPrevBalances(): Record<string, number> {
+  return JSON.parse(localStorage.getItem("tmc_prev_balances") ?? "{}");
+}
+
 interface Props {
   member: Member;
   defaultMonth?: number;
@@ -52,12 +56,15 @@ interface Props {
   onClose: () => void;
 }
 
+type PaymentType = "monthly" | "prevbal";
+
 export default function PaymentModal({
   member,
   defaultMonth,
   defaultYear,
   onClose,
 }: Props) {
+  const [paymentType, setPaymentType] = useState<PaymentType>("monthly");
   const [month, setMonth] = useState(defaultMonth ?? currentMonth);
   const [year, setYear] = useState(defaultYear ?? currentYear);
   const [amountPaid, setAmountPaid] = useState(String(member.monthlyFee));
@@ -66,6 +73,23 @@ export default function PaymentModal({
   const [formError, setFormError] = useState("");
   const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
 
+  const prevBalances = getPrevBalances();
+  const memberIdStr = String(member.memberId);
+  const outstandingBalance = prevBalances[memberIdStr] ?? 0;
+
+  // When switching to prevbal, pre-fill amount with outstanding balance
+  function switchPaymentType(type: PaymentType) {
+    setPaymentType(type);
+    if (type === "prevbal") {
+      setAmountPaid(String(outstandingBalance));
+      setStatus("Paid");
+    } else {
+      setAmountPaid(String(member.monthlyFee));
+      setStatus("Paid");
+    }
+    setFormError("");
+  }
+
   const addPayment = useAddPayment();
   const { data: existing } = usePaymentsByMonthYear(month, year);
 
@@ -73,7 +97,11 @@ export default function PaymentModal({
     (p) => String(p.memberId) === String(member.memberId),
   );
 
-  const upiAmount = Number(amountPaid) || Number(member.monthlyFee);
+  const upiAmount =
+    Number(amountPaid) ||
+    (paymentType === "prevbal"
+      ? outstandingBalance
+      : Number(member.monthlyFee));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -81,6 +109,12 @@ export default function PaymentModal({
     const amount = Number.parseInt(amountPaid, 10);
     if (Number.isNaN(amount) || amount < 0) {
       setFormError("Amount must be a valid non-negative number.");
+      return;
+    }
+    if (paymentType === "prevbal" && amount > outstandingBalance) {
+      setFormError(
+        `Amount cannot exceed outstanding balance (₹${outstandingBalance.toLocaleString()}).`,
+      );
       return;
     }
     try {
@@ -92,6 +126,15 @@ export default function PaymentModal({
         status,
         paymentMode,
       });
+
+      // If paying previous balance, deduct from localStorage
+      if (paymentType === "prevbal") {
+        const bals = getPrevBalances();
+        const current = bals[memberIdStr] ?? 0;
+        bals[memberIdStr] = Math.max(0, current - amount);
+        localStorage.setItem("tmc_prev_balances", JSON.stringify(bals));
+      }
+
       toast.success(`Payment recorded for ${member.name}`);
       // Build a synthetic payment object for the receipt
       const syntheticPayment: Payment = {
@@ -133,53 +176,109 @@ export default function PaymentModal({
           <DialogTitle>Record Payment — {member.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {existingPayment && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-              ⚠️ A payment already exists for this month (₹
-              {Number(existingPayment.amountPaid).toLocaleString()},{" "}
-              {existingPayment.status}). Adding another will create a new
-              record.
+          {/* Payment Type Toggle */}
+          <div className="space-y-1.5">
+            <Label>Payment Type</Label>
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              <button
+                type="button"
+                onClick={() => switchPaymentType("monthly")}
+                data-ocid="payments.type.monthly.toggle"
+                className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                  paymentType === "monthly"
+                    ? "bg-primary text-white"
+                    : "bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Monthly Fee
+              </button>
+              <button
+                type="button"
+                onClick={() => switchPaymentType("prevbal")}
+                data-ocid="payments.type.prevbal.toggle"
+                disabled={outstandingBalance === 0}
+                className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                  paymentType === "prevbal"
+                    ? "bg-amber-600 text-white"
+                    : "bg-background text-muted-foreground hover:text-foreground disabled:opacity-40"
+                }`}
+              >
+                Previous Balance
+                {outstandingBalance > 0 && (
+                  <span className="ml-1 text-xs">
+                    (₹{outstandingBalance.toLocaleString()})
+                  </span>
+                )}
+              </button>
+            </div>
+            {paymentType === "prevbal" && outstandingBalance === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No outstanding previous balance for this member.
+              </p>
+            )}
+          </div>
+
+          {paymentType === "prevbal" && outstandingBalance > 0 && (
+            <div
+              className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800"
+              data-ocid="payments.prevbal.info"
+            >
+              💰 Outstanding previous balance:{" "}
+              <strong>₹{outstandingBalance.toLocaleString()}</strong>. You can
+              pay in full or a partial amount.
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Month</Label>
-              <Select
-                value={String(month)}
-                onValueChange={(v) => setMonth(Number(v))}
-              >
-                <SelectTrigger data-ocid="payments.month.select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONTHS.map((m, i) => (
-                    <SelectItem key={m} value={String(i + 1)}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Year</Label>
-              <Select
-                value={String(year)}
-                onValueChange={(v) => setYear(Number(v))}
-              >
-                <SelectTrigger data-ocid="payments.year.select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {YEARS.map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {paymentType === "monthly" && (
+            <>
+              {existingPayment && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                  ⚠️ A payment already exists for this month (₹
+                  {Number(existingPayment.amountPaid).toLocaleString()},{" "}
+                  {existingPayment.status}). Adding another will create a new
+                  record.
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Month</Label>
+                  <Select
+                    value={String(month)}
+                    onValueChange={(v) => setMonth(Number(v))}
+                  >
+                    <SelectTrigger data-ocid="payments.month.select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m, i) => (
+                        <SelectItem key={m} value={String(i + 1)}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Year</Label>
+                  <Select
+                    value={String(year)}
+                    onValueChange={(v) => setYear(Number(v))}
+                  >
+                    <SelectTrigger data-ocid="payments.year.select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {YEARS.map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="p-amount">Amount Paid (₹) *</Label>
@@ -187,8 +286,13 @@ export default function PaymentModal({
               id="p-amount"
               data-ocid="payments.amount.input"
               type="number"
-              min="0"
-              placeholder={`Monthly fee: ₹${Number(member.monthlyFee).toLocaleString()}`}
+              min="1"
+              max={paymentType === "prevbal" ? outstandingBalance : undefined}
+              placeholder={
+                paymentType === "prevbal"
+                  ? `1 – ${outstandingBalance}`
+                  : `Monthly fee: ₹${Number(member.monthlyFee).toLocaleString()}`
+              }
               value={amountPaid}
               onChange={(e) => setAmountPaid(e.target.value)}
               required
@@ -250,14 +354,23 @@ export default function PaymentModal({
             <Button
               type="submit"
               data-ocid="payments.record.submit_button"
-              className="bg-primary hover:bg-primary/90 text-white"
-              disabled={addPayment.isPending}
+              className={`text-white ${
+                paymentType === "prevbal"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-primary hover:bg-primary/90"
+              }`}
+              disabled={
+                addPayment.isPending ||
+                (paymentType === "prevbal" && outstandingBalance === 0)
+              }
             >
               {addPayment.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Recording...
                 </>
+              ) : paymentType === "prevbal" ? (
+                "Record Balance Payment"
               ) : (
                 "Record Payment"
               )}

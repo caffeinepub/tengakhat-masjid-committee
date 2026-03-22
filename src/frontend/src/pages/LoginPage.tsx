@@ -15,6 +15,16 @@ interface Props {
 
 type TabType = "admin" | "member";
 
+function getAdminCredentials(): { username: string; password: string } {
+  try {
+    const stored = localStorage.getItem("tmc_admin_credentials");
+    if (stored) return JSON.parse(stored);
+  } catch {
+    // ignore
+  }
+  return { username: "admin", password: "logmein" };
+}
+
 export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>("admin");
 
@@ -25,12 +35,12 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
   const [adminError, setAdminError] = useState("");
 
   // Member form
-  const [memberId, setMemberId] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [memberPin, setMemberPin] = useState("");
   const [memberLoading, setMemberLoading] = useState(false);
   const [memberError, setMemberError] = useState("");
 
-  // Fetch members list so we can validate the Member ID on login
+  // Fetch members list so we can validate the Login ID on login
   const {
     data: allMembers,
     isLoading: membersLoading,
@@ -42,7 +52,8 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
     setAdminError("");
     setAdminLoading(true);
     await new Promise((r) => setTimeout(r, 400));
-    if (adminUser.trim() === "admin" && adminPass === "logmein") {
+    const creds = getAdminCredentials();
+    if (adminUser.trim() === creds.username && adminPass === creds.password) {
       toast.success("Welcome back, Admin!");
       onAdminLogin();
     } else {
@@ -57,16 +68,16 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
     setMemberError("");
     setMemberLoading(true);
 
-    const id = memberId.trim();
+    const id = loginId.trim().toLowerCase();
     if (!id) {
-      setMemberError("Please enter your Member ID.");
+      setMemberError("Please enter your Login ID.");
       setMemberLoading(false);
       return;
     }
 
     // If members list failed to load, we can't verify
     if (membersError) {
-      setMemberError("Could not verify Member ID. Please try again.");
+      setMemberError("Could not verify Login ID. Please try again.");
       setMemberLoading(false);
       return;
     }
@@ -78,12 +89,35 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
       return;
     }
 
-    // Check that the Member ID exists in the backend
-    const matchedMember = allMembers.find((m) => String(m.memberId) === id);
-    if (!matchedMember) {
-      setMemberError(
-        "Member ID not found. Please check your ID or contact your admin.",
+    // Resolve loginId -> memberId via tmc_member_login_ids
+    const loginIds: Record<string, string> = JSON.parse(
+      localStorage.getItem("tmc_member_login_ids") ?? "{}",
+    );
+    let resolvedMemberId = loginIds[id];
+
+    // Fallback: try treating the input as a raw memberId (for backward compatibility)
+    if (!resolvedMemberId) {
+      const directMatch = allMembers.find(
+        (m) => String(m.memberId) === loginId.trim(),
       );
+      if (directMatch) {
+        resolvedMemberId = String(directMatch.memberId);
+      }
+    }
+
+    if (!resolvedMemberId) {
+      setMemberError("Login ID not found. Please contact your admin.");
+      toast.error("Login failed");
+      setMemberLoading(false);
+      return;
+    }
+
+    // Verify the resolved memberId exists in backend
+    const matchedMember = allMembers.find(
+      (m) => String(m.memberId) === resolvedMemberId,
+    );
+    if (!matchedMember) {
+      setMemberError("Member not found. Please contact your admin.");
       toast.error("Login failed");
       setMemberLoading(false);
       return;
@@ -95,13 +129,13 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
     const pins: Record<string, string> = JSON.parse(
       localStorage.getItem("tmc_member_pins") ?? "{}",
     );
-    const expectedPin = pins[id] ?? "1234";
+    const expectedPin = pins[resolvedMemberId] ?? "1234";
 
     if (memberPin === expectedPin) {
       toast.success("Welcome!");
-      onMemberLogin(id);
+      onMemberLogin(resolvedMemberId);
     } else {
-      setMemberError("Invalid Member ID or PIN.");
+      setMemberError("Invalid Login ID or PIN.");
       toast.error("Login failed");
     }
     setMemberLoading(false);
@@ -265,15 +299,15 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
               <form onSubmit={handleMemberSubmit} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="m-id" className="font-semibold text-gray-700">
-                    Member ID
+                    Login ID
                   </Label>
                   <Input
                     id="m-id"
                     data-ocid="member.login.id.input"
                     type="text"
-                    placeholder="Enter your Member ID"
-                    value={memberId}
-                    onChange={(e) => setMemberId(e.target.value)}
+                    placeholder="Enter your login ID"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
                     required
                     autoFocus
                   />
@@ -297,8 +331,9 @@ export default function LoginPage({ onAdminLogin, onMemberLogin }: Props) {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  Default PIN is <strong>1234</strong>. You can change it after
-                  login.
+                  Your login ID is your <strong>first name</strong> or{" "}
+                  <strong>3-digit number</strong> assigned by admin. Default PIN
+                  is <strong>1234</strong>.
                 </p>
                 {memberError && (
                   <p
